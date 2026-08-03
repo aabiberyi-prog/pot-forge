@@ -1,4 +1,5 @@
 use crate::config::get;
+use crate::config::set;
 use crate::config::StoreWrapper;
 use crate::error::Error;
 use crate::StringWrapper;
@@ -6,6 +7,8 @@ use crate::APP;
 use log::{error, info};
 use serde_json::{json, Value};
 use std::io::Read;
+use std::path::PathBuf;
+use std::process::Command;
 use tauri::Manager;
 
 #[tauri::command]
@@ -222,4 +225,213 @@ pub fn open_devtools(window: tauri::Window) {
     } else {
         window.close_devtools();
     }
+}
+
+/// Apply window opacity (0.15–1.0). Persists as `window_opacity` in config.
+#[tauri::command]
+pub fn set_window_opacity(app_handle: tauri::AppHandle, opacity: f64) -> Result<f64, String> {
+    let opacity = opacity.clamp(0.15, 1.0);
+    set("window_opacity", opacity);
+    apply_opacity_to_app(&app_handle, opacity)?;
+    Ok(opacity)
+}
+
+/// Read current opacity preference (default 0.92).
+#[tauri::command]
+pub fn get_window_opacity() -> f64 {
+    match get("window_opacity") {
+        Some(v) => v.as_f64().unwrap_or(0.92).clamp(0.15, 1.0),
+        None => 0.92,
+    }
+}
+
+pub fn apply_opacity_to_app(app_handle: &tauri::AppHandle, opacity: f64) -> Result<(), String> {
+    let opacity = opacity.clamp(0.15, 1.0);
+    let labels = ["translate", "config", "recognize", "updater"];
+    for label in labels {
+        if let Some(window) = app_handle.get_window(label) {
+            apply_opacity_to_window(&window, opacity)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn apply_opacity_to_window(window: &tauri::Window, opacity: f64) -> Result<(), String> {
+    let opacity = opacity.clamp(0.15, 1.0);
+    #[cfg(windows)]
+    {
+        #[link(name = "user32")]
+        extern "system" {
+            fn GetWindowLongW(hwnd: *mut core::ffi::c_void, index: i32) -> i32;
+            fn SetWindowLongW(hwnd: *mut core::ffi::c_void, index: i32, new_long: i32) -> i32;
+            fn SetLayeredWindowAttributes(
+                hwnd: *mut core::ffi::c_void,
+                key: u32,
+                alpha: u8,
+                flags: u32,
+            ) -> i32;
+        }
+        const GWL_EXSTYLE: i32 = -20;
+        const WS_EX_LAYERED: i32 = 0x0008_0000;
+        const LWA_ALPHA: u32 = 0x2;
+
+        // tauri 1.8 returns windows::Win32::Foundation::HWND
+        let hwnd_raw = window.hwnd().map_err(|e| e.to_string())?;
+        let hwnd = hwnd_raw.0 as *mut core::ffi::c_void;
+        unsafe {
+            let ex = GetWindowLongW(hwnd, GWL_EXSTYLE);
+            if ex & WS_EX_LAYERED == 0 {
+                SetWindowLongW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED);
+            }
+            let alpha = (opacity * 255.0).round() as u8;
+            let ok = SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
+            if ok == 0 {
+                return Err("SetLayeredWindowAttributes failed".into());
+            }
+        }
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    {
+        // Best-effort: emit to frontend so CSS can dim content.
+        let _ = window.emit("window_opacity", opacity);
+        Ok(())
+    }
+}
+
+fn find_edge_tts_exe() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("EDGE_TTS_PATH") {
+        let pb = PathBuf::from(p);
+        if pb.exists() {
+            return Some(pb);
+        }
+    }
+    let local = std::env::var("LOCALAPPDATA").ok().map(PathBuf::from);
+    if let Some(base) = local {
+        let candidates = [
+            base.join("hermes\\hermes-agent\\venv\\Scripts\\edge-tts.exe"),
+            base.join("Programs\\Python\\Python312\\Scripts\\edge-tts.exe"),
+            base.join("Programs\\Python\\Python311\\Scripts\\edge-tts.exe"),
+            base.join("Programs\\Python\\Python310\\Scripts\\edge-tts.exe"),
+        ];
+        for c in candidates {
+            if c.exists() {
+                return Some(c);
+            }
+        }
+    }
+    // PATH lookup
+    #[cfg(windows)]
+    {
+        let output = Command::new("where.exe").arg("edge-tts").output().ok()?;
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = text.lines().next() {
+                let p = PathBuf::from(line.trim());
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let output = Command::new("which").arg("edge-tts").output().ok()?;
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = text.lines().next() {
+                let p = PathBuf::from(line.trim());
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Synthesize speech with Microsoft Edge neural voices via local `edge-tts` CLI.
+/// Returns raw MP3 bytes as a JSON array of numbers (Lingva-compatible).
+#[tauri::command(async)]
+pub fn edge_tts_synthesize(
+    text: String,
+    lang: String,
+    voice_zh: Option<String>,
+    voice_en: Option<String>,
+    rate: Option<String>,
+    pitch: Option<String>,
+) -> Result<Vec<u8>, String> {
+    if text.trim().is_empty() {
+        return Err("text is empty".into());
+    }
+    if text.chars().count() > 2000 {
+        return Err("text must be at most 2000 characters".into());
+    }
+
+    let edge = find_edge_tts_exe().ok_or_else(|| {
+        "edge-tts not found. Install with: pip install edge-tts  (or set EDGE_TTS_PATH)".to_string()
+    })?;
+
+    let lang_l = lang.to_lowercase();
+    let voice = if lang_l.starts_with("zh") || lang_l.starts_with("cmn") {
+        voice_zh.unwrap_or_else(|| "zh-CN-XiaoxiaoNeural".into())
+    } else {
+        voice_en.unwrap_or_else(|| "en-US-AvaNeural".into())
+    };
+    let rate = rate.unwrap_or_else(|| "+0%".into());
+    let pitch = pitch.unwrap_or_else(|| "+8Hz".into());
+
+    let tmp = std::env::temp_dir().join(format!(
+        "pot-forge-tts-{}.mp3",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    ));
+
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = Command::new(&edge);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let output = cmd
+        .args([
+            "--voice",
+            &voice,
+            "--rate",
+            &rate,
+            "--pitch",
+            &pitch,
+            "--text",
+            &text,
+            "--write-media",
+            tmp.to_str().ok_or("temp path invalid")?,
+        ])
+        .output()
+        .map_err(|e| format!("failed to run edge-tts: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "edge-tts exit {:?}: {}",
+            output.status.code(),
+            stderr
+        ));
+    }
+
+    let bytes = std::fs::read(&tmp).map_err(|e| format!("read mp3 failed: {e}"))?;
+    let _ = std::fs::remove_file(&tmp);
+    if bytes.len() < 32 {
+        return Err("edge-tts produced empty audio".into());
+    }
+    info!(
+        "edge_tts voice={} lang={} chars={} bytes={}",
+        voice,
+        lang,
+        text.chars().count(),
+        bytes.len()
+    );
+    Ok(bytes)
 }

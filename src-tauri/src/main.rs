@@ -147,7 +147,10 @@ fn main() {
             local,
             install_plugin,
             font_list,
-            aliyun
+            aliyun,
+            set_window_opacity,
+            get_window_opacity,
+            edge_tts_synthesize
         ])
         .on_system_tray_event(tray_event_handler)
         .build(tauri::generate_context!())

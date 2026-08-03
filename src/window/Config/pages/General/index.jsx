@@ -10,6 +10,7 @@ import { Dropdown } from '@nextui-org/react';
 import { info } from 'tauri-plugin-log-api';
 import { Button } from '@nextui-org/react';
 import { Switch } from '@nextui-org/react';
+import { Slider } from '@nextui-org/react';
 import 'flag-icons/css/flag-icons.min.css';
 import { Input } from '@nextui-org/react';
 import { Card } from '@nextui-org/react';
@@ -22,6 +23,7 @@ import { useToastStyle } from '../../../../hooks';
 import { osType } from '../../../../utils/env';
 
 let timer = null;
+let opacityTimer = null;
 
 export default function General() {
     const [autoStart, setAutoStart] = useState(false);
@@ -34,6 +36,7 @@ export default function General() {
     const [appFallbackFont, setAppFallbackFont] = useConfig('app_fallback_font', 'default');
     const [appFontSize, setAppFontSize] = useConfig('app_font_size', 16);
     const [transparent, setTransparent] = useConfig('transparent', true);
+    const [windowOpacity, setWindowOpacity] = useConfig('window_opacity', 0.92);
     const [devMode, setDevMode] = useConfig('dev_mode', false);
     const [trayClickEvent, setTrayClickEvent] = useConfig('tray_click_event', 'config');
     const [proxyEnable, setProxyEnable] = useConfig('proxy_enable', false);
@@ -475,6 +478,37 @@ export default function General() {
                                 isSelected={transparent}
                                 onValueChange={(v) => {
                                     setTransparent(v);
+                                }}
+                            />
+                        )}
+                    </div>
+                    <div className={`config-item ${osType === 'Darwin' && 'hidden'}`}>
+                        <h3 className='min-w-[120px]'>
+                            {t('config.general.window_opacity')}
+                            {windowOpacity !== null && (
+                                <span className='ml-2 text-default-500'>
+                                    {Math.round((windowOpacity ?? 0.92) * 100)}%
+                                </span>
+                            )}
+                        </h3>
+                        {windowOpacity !== null && (
+                            <Slider
+                                size='sm'
+                                step={0.01}
+                                minValue={0.15}
+                                maxValue={1}
+                                value={windowOpacity}
+                                className='max-w-[50%]'
+                                aria-label={t('config.general.window_opacity')}
+                                onChange={(v) => {
+                                    const val = Array.isArray(v) ? v[0] : v;
+                                    setWindowOpacity(val);
+                                    if (opacityTimer) clearTimeout(opacityTimer);
+                                    opacityTimer = setTimeout(() => {
+                                        invoke('set_window_opacity', { opacity: val }).catch((e) => {
+                                            info(`set_window_opacity failed: ${e}`);
+                                        });
+                                    }, 80);
                                 }}
                             />
                         )}

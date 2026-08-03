@@ -7,8 +7,8 @@
         "withGlobalTauri": false
     },
     "package": {
-        "productName": "pot",
-        "version": "3.0.7"
+        "productName": "Pot Forge",
+        "version": "3.0.7-forge.1"
     },
     "tauri": {
         "allowlist": {
@@ -67,9 +67,9 @@
             "category": "Utility",
             "copyright": "GPLv3",
             "targets": "all",
-            "identifier": "com.pot-app.desktop",
-            "longDescription": "A cross-platform text translation and ocr software",
-            "shortDescription": "Pot App",
+            "identifier": "com.aabiber.pot-forge",
+            "longDescription": "Pot Forge — fork of pot-desktop with opacity control and built-in Edge TTS",
+            "shortDescription": "Pot Forge",
             "externalBin": [],
             "resources": [],
             "icon": [

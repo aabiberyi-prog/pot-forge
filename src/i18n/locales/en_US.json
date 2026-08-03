@@ -71,6 +71,7 @@
                     "system": "System"
                 },
                 "transparent": "Transparent Effect",
+                "window_opacity": "Window Opacity",
                 "dev_mode": "Developer Mode",
                 "proxy": {
                     "title": "Proxy",
@@ -436,6 +437,13 @@
                 "lingva_tts": {
                     "title": "Lingva",
                     "request_path": "Request Path"
+                },
+                "edge_tts": {
+                    "title": "Edge TTS (Shaoyu)",
+                    "voice_zh": "Chinese Voice",
+                    "voice_en": "English Voice",
+                    "rate": "Rate (e.g. +0%)",
+                    "pitch": "Pitch (e.g. +8Hz)"
                 }
             },
             "collection": {

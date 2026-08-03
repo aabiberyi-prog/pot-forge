@@ -107,6 +107,14 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
                 #[cfg(not(target_os = "linux"))]
                 set_shadow(&window, true).unwrap_or_default();
             }
+            // Pot Forge: apply saved window opacity to new windows
+            if label != "screenshot" && label != "daemon" {
+                let opacity = match get("window_opacity") {
+                    Some(v) => v.as_f64().unwrap_or(0.92),
+                    None => 0.92,
+                };
+                let _ = crate::cmd::apply_opacity_to_window(&window, opacity);
+            }
             let _ = window.current_monitor();
             (window, false)
         }
