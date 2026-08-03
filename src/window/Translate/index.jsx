@@ -98,6 +98,23 @@ export default function Translate() {
         const items = reorder(translateServiceInstanceList, result.source.index, result.destination.index);
         setTranslateServiceInstanceList(items);
     };
+    // Keep CSS shell opacity in sync (never fade text panels)
+    useEffect(() => {
+        if (windowOpacity !== null) {
+            document.documentElement.style.setProperty('--pot-bg-opacity', String(windowOpacity));
+        }
+        const un = listen('window_opacity', (e) => {
+            const val = e.payload;
+            if (typeof val === 'number') {
+                setWindowOpacity(val);
+                document.documentElement.style.setProperty('--pot-bg-opacity', String(val));
+            }
+        });
+        return () => {
+            un.then((f) => f());
+        };
+    }, [windowOpacity]);
+
     // 是否自动关闭窗口
     useEffect(() => {
         if (closeOnBlur !== null && !closeOnBlur) {
@@ -231,12 +248,19 @@ export default function Translate() {
         collectionServiceInstanceList,
     ]);
 
+    // Shell chrome opacity only — source/target text panels stay fully opaque (see SourceArea/TargetArea).
+    const shellOpacity = windowOpacity ?? 0.92;
+
     return (
         pluginList && (
             <div
-                className={`bg-background h-screen w-screen ${
+                className={`h-screen w-screen relative ${
                     osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'
                 }`}
+                style={{
+                    // Transparent shell; does not multiply/fade child text opacity
+                    backgroundColor: `hsl(var(--nextui-background) / ${shellOpacity})`,
+                }}
             >
                 <div
                     className='fixed top-[5px] left-[5px] right-[5px] h-[30px]'
@@ -288,6 +312,11 @@ export default function Translate() {
                                 onChange={(v) => {
                                     const val = Array.isArray(v) ? v[0] : v;
                                     setWindowOpacity(val);
+                                    // CSS-only shell fade (text panels remain solid)
+                                    document.documentElement.style.setProperty(
+                                        '--pot-bg-opacity',
+                                        String(val)
+                                    );
                                     if (translateOpacityTimer) clearTimeout(translateOpacityTimer);
                                     translateOpacityTimer = setTimeout(() => {
                                         invoke('set_window_opacity', { opacity: val }).catch(() => {});

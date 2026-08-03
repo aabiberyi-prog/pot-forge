@@ -71,7 +71,7 @@
                     "system": "跟随系统"
                 },
                 "transparent": "透明效果",
-                "window_opacity": "窗口不透明度",
+                "window_opacity": "窗口背景透明度（不影响原文/译文）",
                 "dev_mode": "开发模式",
                 "proxy": {
                     "title": "网络代理",

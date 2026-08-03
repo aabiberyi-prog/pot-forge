@@ -75,7 +75,12 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
     match app_handle.get_window(label) {
         Some(v) => {
             info!("Window existence: {}", label);
-            v.set_focus().unwrap();
+            // Ensure existing windows actually reappear above Terminal/other apps
+            let _ = v.unminimize();
+            let _ = v.show();
+            let _ = v.set_always_on_top(true);
+            let _ = v.set_focus();
+            let _ = v.set_always_on_top(false);
             (v, true)
         }
         None => {
@@ -273,6 +278,12 @@ pub fn text_translate(text: String) {
     let state: tauri::State<StringWrapper> = app_handle.state();
     state.0.lock().unwrap().replace_range(.., &text);
     let window = translate_window();
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_focus();
+    // Keep briefly on top so it wins focus against Windows Terminal after mouse release
+    let _ = window.set_always_on_top(true);
     window.emit("new_text", text).unwrap();
 }
 

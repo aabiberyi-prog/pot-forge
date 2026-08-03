@@ -33,8 +33,8 @@ export function Config(props) {
             [INSTANCE_NAME_CONFIG_KEY]: t('services.tts.edge_tts.title'),
             voice_zh: 'zh-CN-XiaoxiaoNeural',
             voice_en: 'en-US-AvaNeural',
-            rate: '+0%',
-            pitch: '+8Hz',
+            rate: '-20%',
+            pitch: '+10Hz',
         },
         { sync: false }
     );
@@ -99,10 +99,10 @@ export function Config(props) {
                 <div className='config-item'>
                     <h3 className='my-auto'>{t('services.tts.edge_tts.rate')}</h3>
                     <Input
-                        value={edgeConfig.rate || '+0%'}
+                        value={edgeConfig.rate || '-20%'}
                         variant='bordered'
                         className='max-w-[50%]'
-                        placeholder='+0%'
+                        placeholder='-20%'
                         onValueChange={(value) => {
                             setEdgeConfig({ ...edgeConfig, rate: value });
                         }}
@@ -111,10 +111,10 @@ export function Config(props) {
                 <div className='config-item'>
                     <h3 className='my-auto'>{t('services.tts.edge_tts.pitch')}</h3>
                     <Input
-                        value={edgeConfig.pitch || '+8Hz'}
+                        value={edgeConfig.pitch || '+10Hz'}
                         variant='bordered'
                         className='max-w-[50%]'
-                        placeholder='+8Hz'
+                        placeholder='+10Hz'
                         onValueChange={(value) => {
                             setEdgeConfig({ ...edgeConfig, pitch: value });
                         }}

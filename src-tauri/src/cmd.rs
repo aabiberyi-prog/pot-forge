@@ -227,7 +227,8 @@ pub fn open_devtools(window: tauri::Window) {
     }
 }
 
-/// Apply window opacity (0.15–1.0). Persists as `window_opacity` in config.
+/// Persist shell background opacity (0.15–1.0) and notify frontends.
+/// Does NOT fade the whole HWND — text stays fully opaque via CSS panels.
 #[tauri::command]
 pub fn set_window_opacity(app_handle: tauri::AppHandle, opacity: f64) -> Result<f64, String> {
     let opacity = opacity.clamp(0.15, 1.0);
@@ -258,6 +259,8 @@ pub fn apply_opacity_to_app(app_handle: &tauri::AppHandle, opacity: f64) -> Resu
 
 pub fn apply_opacity_to_window(window: &tauri::Window, opacity: f64) -> Result<(), String> {
     let opacity = opacity.clamp(0.15, 1.0);
+    // Keep OS-level window fully opaque so text is never faded by LWA_ALPHA.
+    // Front-end applies opacity only to the chrome/background via CSS.
     #[cfg(windows)]
     {
         #[link(name = "user32")]
@@ -275,7 +278,6 @@ pub fn apply_opacity_to_window(window: &tauri::Window, opacity: f64) -> Result<(
         const WS_EX_LAYERED: i32 = 0x0008_0000;
         const LWA_ALPHA: u32 = 0x2;
 
-        // tauri 1.8 returns windows::Win32::Foundation::HWND
         let hwnd_raw = window.hwnd().map_err(|e| e.to_string())?;
         let hwnd = hwnd_raw.0 as *mut core::ffi::c_void;
         unsafe {
@@ -283,20 +285,12 @@ pub fn apply_opacity_to_window(window: &tauri::Window, opacity: f64) -> Result<(
             if ex & WS_EX_LAYERED == 0 {
                 SetWindowLongW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED);
             }
-            let alpha = (opacity * 255.0).round() as u8;
-            let ok = SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
-            if ok == 0 {
-                return Err("SetLayeredWindowAttributes failed".into());
-            }
+            // Always fully opaque at HWND level — shell transparency is CSS-only.
+            let _ = SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
         }
-        return Ok(());
     }
-    #[cfg(not(windows))]
-    {
-        // Best-effort: emit to frontend so CSS can dim content.
-        let _ = window.emit("window_opacity", opacity);
-        Ok(())
-    }
+    let _ = window.emit("window_opacity", opacity);
+    Ok(())
 }
 
 fn find_edge_tts_exe() -> Option<PathBuf> {
@@ -433,8 +427,8 @@ pub fn import_official_pot_config(mode: String) -> Result<serde_json::Value, Str
                 "instanceName": "Edge TTS（少御向）",
                 "voice_zh": "zh-CN-XiaoxiaoNeural",
                 "voice_en": "en-US-AvaNeural",
-                "rate": "+0%",
-                "pitch": "+8Hz"
+                "rate": "-20%",
+                "pitch": "+10Hz"
             }),
         );
     }
@@ -484,8 +478,13 @@ pub fn edge_tts_synthesize(
     } else {
         voice_en.unwrap_or_else(|| "en-US-AvaNeural".into())
     };
-    let rate = rate.unwrap_or_else(|| "+0%".into());
-    let pitch = pitch.unwrap_or_else(|| "+8Hz".into());
+    // Negative rates like -20% MUST use --rate=-20% form; otherwise argparse
+    // treats "-20%" as a new flag and errors: "argument --rate: expected one argument".
+    let rate = rate.unwrap_or_else(|| "-20%".into());
+    let pitch = pitch.unwrap_or_else(|| "+10Hz".into());
+    let rate_arg = format!("--rate={rate}");
+    let pitch_arg = format!("--pitch={pitch}");
+    let voice_arg = format!("--voice={voice}");
 
     let tmp = std::env::temp_dir().join(format!(
         "pot-forge-tts-{}.mp3",
@@ -494,6 +493,7 @@ pub fn edge_tts_synthesize(
             .map(|d| d.as_millis())
             .unwrap_or(0)
     ));
+    let tmp_str = tmp.to_str().ok_or("temp path invalid")?.to_string();
 
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
@@ -503,16 +503,13 @@ pub fn edge_tts_synthesize(
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     let output = cmd
         .args([
-            "--voice",
-            &voice,
-            "--rate",
-            &rate,
-            "--pitch",
-            &pitch,
+            voice_arg.as_str(),
+            rate_arg.as_str(),
+            pitch_arg.as_str(),
             "--text",
-            &text,
+            text.as_str(),
             "--write-media",
-            tmp.to_str().ok_or("temp path invalid")?,
+            tmp_str.as_str(),
         ])
         .output()
         .map_err(|e| format!("failed to run edge-tts: {e}"))?;

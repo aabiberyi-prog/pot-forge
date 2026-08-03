@@ -71,7 +71,7 @@
                     "system": "System"
                 },
                 "transparent": "Transparent Effect",
-                "window_opacity": "Window Opacity",
+                "window_opacity": "Window background opacity (text stays solid)",
                 "dev_mode": "Developer Mode",
                 "proxy": {
                     "title": "Proxy",

@@ -22,7 +22,7 @@ Configs do **not** conflict with the installed official Pot.
 2. **Built-in Edge TTS**（少御向 defaults）
    - Service → Speech → Edge TTS
    - ZH `zh-CN-XiaoxiaoNeural` / EN `en-US-AvaNeural`
-   - Rate `+0%`, pitch `+8Hz`
+   - Rate `-20%`（稍慢）, pitch `+10Hz`
    - Requires local `edge-tts` (`pip install edge-tts`) or env `EDGE_TTS_PATH`
 3. **Import from official Pot**
    - Settings → Backup → 从官方 Pot 导入

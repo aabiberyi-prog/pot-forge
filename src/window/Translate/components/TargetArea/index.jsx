@@ -376,7 +376,9 @@ export default function TargetArea(props) {
     return (
         <Card
             shadow='none'
-            className='rounded-[10px]'
+            // Fully opaque panel so shell transparency never fades translation text
+            className='rounded-[10px] bg-content1 opacity-100'
+            style={{ opacity: 1, backgroundColor: 'hsl(var(--nextui-content1) / 1)' }}
         >
             <Toaster />
             <CardHeader

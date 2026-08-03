@@ -503,6 +503,11 @@ export default function General() {
                                 onChange={(v) => {
                                     const val = Array.isArray(v) ? v[0] : v;
                                     setWindowOpacity(val);
+                                    // Only shell/background uses this; text panels stay solid
+                                    document.documentElement.style.setProperty(
+                                        '--pot-bg-opacity',
+                                        String(val)
+                                    );
                                     if (opacityTimer) clearTimeout(opacityTimer);
                                     opacityTimer = setTimeout(() => {
                                         invoke('set_window_opacity', { opacity: val }).catch((e) => {

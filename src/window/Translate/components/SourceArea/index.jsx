@@ -367,7 +367,9 @@ export default function SourceArea(props) {
         <div className={hideSource && windowType !== '[INPUT_TRANSLATE]' && 'hidden'}>
             <Card
                 shadow='none'
-                className='bg-content1 rounded-[10px] mt-[1px] pb-0'
+                // Fully opaque panel so window chrome transparency never fades source text
+                className='bg-content1 rounded-[10px] mt-[1px] pb-0 opacity-100'
+                style={{ opacity: 1, backgroundColor: 'hsl(var(--nextui-content1) / 1)' }}
             >
                 <Toaster />
                 <CardBody className='bg-content1 p-[12px] pb-0 max-h-[40vh] overflow-y-auto'>

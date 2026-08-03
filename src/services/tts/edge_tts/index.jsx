@@ -9,8 +9,8 @@ export async function tts(text, lang, options = {}) {
     const {
         voice_zh = 'zh-CN-XiaoxiaoNeural',
         voice_en = 'en-US-AvaNeural',
-        rate = '+0%',
-        pitch = '+8Hz',
+        rate = '-20%',
+        pitch = '+10Hz',
     } = config;
 
     const bytes = await invoke('edge_tts_synthesize', {
