@@ -21,6 +21,9 @@ import WebDavModal from './WebDavModal';
 import AliyunModal from './AliyunModal';
 import * as local from './utils/local';
 import * as aliyun from './utils/aliyun';
+import { invoke } from '@tauri-apps/api';
+import { ask } from '@tauri-apps/api/dialog';
+import { relaunch } from '@tauri-apps/api/process';
 
 let refreshTimer = null;
 
@@ -44,8 +47,47 @@ export default function Backup() {
         onOpenChange: onAliyunListOpenChange,
     } = useDisclosure();
     const [uploading, setUploading] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [hasOfficial, setHasOfficial] = useState(null);
     const toastStyle = useToastStyle();
     const { t } = useTranslation();
+
+    useEffect(() => {
+        invoke('has_official_pot_config')
+            .then((v) => setHasOfficial(!!v))
+            .catch(() => setHasOfficial(false));
+    }, []);
+
+    const onImportOfficial = async () => {
+        try {
+            const ok = await ask(t('config.backup.import_official_confirm'), {
+                title: t('config.backup.import_official'),
+                type: 'warning',
+            });
+            if (!ok) return;
+            setImporting(true);
+            const result = await invoke('import_official_pot_config', { mode: 'merge' });
+            await invoke('reload_store');
+            toast.success(
+                t('config.backup.import_official_success', {
+                    count: result?.imported ?? 0,
+                }),
+                { style: toastStyle, duration: 4000 }
+            );
+            // Relaunch so all hooks pick up new store values
+            setTimeout(() => {
+                relaunch().catch(() => {
+                    toast(t('config.backup.import_official_restart'), { style: toastStyle });
+                });
+            }, 800);
+        } catch (e) {
+            toast.error(t('config.backup.import_official_failed') + ': ' + e.toString(), {
+                style: toastStyle,
+            });
+        } finally {
+            setImporting(false);
+        }
+    };
 
     const onBackup = async () => {
         setUploading(true);
@@ -179,8 +221,32 @@ export default function Backup() {
     }, [backupType]);
 
     return (
+        <>
         <Card className='mb-[10px]'>
             <Toaster />
+            <CardBody>
+                <div className='config-item'>
+                    <div>
+                        <h3>{t('config.backup.import_official')}</h3>
+                        <p className='text-small text-default-400 max-w-[360px]'>
+                            {t('config.backup.import_official_desc')}
+                        </p>
+                    </div>
+                    <Button
+                        color='primary'
+                        variant='flat'
+                        isLoading={importing}
+                        isDisabled={hasOfficial === false}
+                        onPress={onImportOfficial}
+                    >
+                        {hasOfficial === false
+                            ? t('config.backup.import_official_missing')
+                            : t('config.backup.import_official_action')}
+                    </Button>
+                </div>
+            </CardBody>
+        </Card>
+        <Card className='mb-[10px]'>
             <CardBody>
                 <div className='config-item'>
                     <h3 className='my-auto'>{t('config.backup.type')}</h3>
@@ -313,5 +379,6 @@ export default function Backup() {
                 // refreshToken={aliyunRefreshToken}
             />
         </Card>
+        </>
     );
 }

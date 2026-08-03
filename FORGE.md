@@ -14,37 +14,44 @@ License: **GPL-3.0** (same as upstream).
 
 Configs do **not** conflict with the installed official Pot.
 
-## Forge features (this branch)
+## Features (this fork)
 
-1. **Window opacity slider** — Settings → General → 窗口不透明度 (15%–100%)
-2. **Built-in Edge TTS** — Service → Speech → Edge TTS（少御向）
-   - Default ZH: `zh-CN-XiaoxiaoNeural`
-   - Default EN: `en-US-AvaNeural`
+1. **Window opacity**
+   - Settings → General → 窗口不透明度 (15%–100%)
+   - Translate window title bar mini slider (Windows)
+2. **Built-in Edge TTS**（少御向 defaults）
+   - Service → Speech → Edge TTS
+   - ZH `zh-CN-XiaoxiaoNeural` / EN `en-US-AvaNeural`
    - Rate `+0%`, pitch `+8Hz`
-   - Requires local `edge-tts` CLI (`pip install edge-tts`) or set env `EDGE_TTS_PATH`
+   - Requires local `edge-tts` (`pip install edge-tts`) or env `EDGE_TTS_PATH`
+3. **Import from official Pot**
+   - Settings → Backup → 从官方 Pot 导入
+   - Merges `com.pot-app.desktop\config.json`, prefers Edge TTS, keeps Forge opacity, then relaunches
 
 ## Develop
 
-```bash
-# Requirements: Node 18+, pnpm 8+, Rust stable, VS Build Tools (Windows), WebView2
+```powershell
+cd C:\Users\AABIBER\Documents\pot-forge
+git checkout master   # or feature/forge-core
+
+# Node 18+, pnpm 8+, Rust stable, VS Build Tools, WebView2
 pnpm install
 pnpm tauri dev
 pnpm tauri build
 ```
 
-## Migrate config from official Pot
+Installer output (after build):
 
-Copy selected keys from:
+```text
+src-tauri\target\release\bundle\nsis\
+src-tauri\target\release\bundle\msi\
+```
 
-`%AppData%\com.pot-app.desktop\config.json`
+## Migrate config
 
-into:
+**In-app (recommended):** Backup → 一键导入  
 
-`%AppData%\com.aabiber.pot-forge\config.json`
-
-Suggested keys: `openai`, `translate_*`, `hotkey_*`, `app_language`, `app_font_size`.
-
-Then set:
+**Manual:** copy keys from official `config.json` into Forge config, then set:
 
 ```json
 "tts_service_list": ["edge_tts"],
@@ -60,4 +67,4 @@ git merge upstream/master
 
 ## About
 
-Upstream copyright remains with pot-app contributors. This fork adds opacity control and Edge TTS integration for secondary development.
+Upstream copyright remains with pot-app contributors. This fork adds opacity control, Edge TTS, and official-config import for secondary development.

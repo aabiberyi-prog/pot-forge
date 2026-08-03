@@ -3,10 +3,11 @@ import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import { appWindow, currentMonitor } from '@tauri-apps/api/window';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
-import { Spacer, Button } from '@nextui-org/react';
+import { Spacer, Button, Slider } from '@nextui-org/react';
 import { AiFillCloseCircle } from 'react-icons/ai';
 import React, { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api';
 import { BsPinFill } from 'react-icons/bs';
 
 import LanguageArea from './components/LanguageArea';
@@ -20,6 +21,7 @@ import { info } from 'tauri-plugin-log-api';
 let blurTimeout = null;
 let resizeTimeout = null;
 let moveTimeout = null;
+let translateOpacityTimer = null;
 
 const listenBlur = () => {
     return listen('tauri://blur', () => {
@@ -80,6 +82,7 @@ export default function Translate() {
     const [ttsServiceInstanceList] = useConfig('tts_service_list', ['edge_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
     const [hideLanguage] = useConfig('hide_language', false);
+    const [windowOpacity, setWindowOpacity] = useConfig('window_opacity', 0.92);
     const [pined, setPined] = useState(false);
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
@@ -239,7 +242,11 @@ export default function Translate() {
                     className='fixed top-[5px] left-[5px] right-[5px] h-[30px]'
                     data-tauri-drag-region='true'
                 />
-                <div className={`h-[35px] w-full flex ${osType === 'Darwin' ? 'justify-end' : 'justify-between'}`}>
+                <div
+                    className={`h-[35px] w-full flex items-center px-[4px] gap-1 ${
+                        osType === 'Darwin' ? 'justify-end' : 'justify-between'
+                    }`}
+                >
                     <Button
                         isIconOnly
                         size='sm'
@@ -261,6 +268,34 @@ export default function Translate() {
                     >
                         <BsPinFill className={`text-[20px] ${pined ? 'text-primary' : 'text-default-400'}`} />
                     </Button>
+                    {windowOpacity !== null && osType !== 'Darwin' && (
+                        <div
+                            className='flex items-center gap-1 flex-1 min-w-0 px-1'
+                            data-tauri-drag-region='false'
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            <span className='text-[11px] text-default-400 shrink-0 w-[28px] text-right'>
+                                {Math.round(windowOpacity * 100)}%
+                            </span>
+                            <Slider
+                                size='sm'
+                                step={0.01}
+                                minValue={0.15}
+                                maxValue={1}
+                                value={windowOpacity}
+                                className='flex-1 max-w-[140px]'
+                                aria-label='window opacity'
+                                onChange={(v) => {
+                                    const val = Array.isArray(v) ? v[0] : v;
+                                    setWindowOpacity(val);
+                                    if (translateOpacityTimer) clearTimeout(translateOpacityTimer);
+                                    translateOpacityTimer = setTimeout(() => {
+                                        invoke('set_window_opacity', { opacity: val }).catch(() => {});
+                                    }, 60);
+                                }}
+                            />
+                        </div>
+                    )}
                     <Button
                         isIconOnly
                         size='sm'

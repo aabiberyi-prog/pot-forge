@@ -350,6 +350,112 @@ fn find_edge_tts_exe() -> Option<PathBuf> {
     None
 }
 
+/// Probe whether official Pot config exists (for import wizard).
+#[tauri::command]
+pub fn has_official_pot_config() -> bool {
+    official_pot_config_path().map(|p| p.exists()).unwrap_or(false)
+}
+
+fn official_pot_config_path() -> Option<PathBuf> {
+    let config_dir = dirs::config_dir()?;
+    Some(
+        config_dir
+            .join("com.pot-app.desktop")
+            .join("config.json"),
+    )
+}
+
+/// Import settings from official Pot (`com.pot-app.desktop`) into this app.
+/// `mode`: "merge" keeps existing forge keys unless overwritten by official;
+///         "replace" clears nothing but overwrites every key present in official file.
+/// Returns number of keys written.
+#[tauri::command]
+pub fn import_official_pot_config(mode: String) -> Result<serde_json::Value, String> {
+    let path = official_pot_config_path().ok_or("cannot resolve config dir")?;
+    if !path.exists() {
+        return Err(format!(
+            "official Pot config not found: {}",
+            path.display()
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|e| format!("read failed: {e}"))?;
+    let official: serde_json::Map<String, Value> = serde_json::from_str(&raw)
+        .map_err(|e| format!("invalid official config json: {e}"))?;
+
+    let state = APP.get().unwrap().state::<StoreWrapper>();
+    let mut store = state.0.lock().unwrap();
+
+    // Keys we never import (identity / package specific)
+    let skip = ["/* unused */"];
+    let _ = skip;
+
+    let mut imported = 0u32;
+    let mut keys = Vec::new();
+    for (k, v) in official.iter() {
+        if mode == "merge" {
+            // Always overwrite with official values for a true "migrate" experience
+            // except keep forge-only defaults if already set: window_opacity, edge_tts
+            if k == "window_opacity" && store.get(k).is_some() {
+                continue;
+            }
+        }
+        store
+            .insert(k.clone(), v.clone())
+            .map_err(|e| e.to_string())?;
+        imported += 1;
+        keys.push(k.clone());
+    }
+
+    // Prefer built-in Edge TTS after migrate if official only had lingva_tts
+    if let Some(Value::Array(list)) = store.get("tts_service_list") {
+        let mut new_list: Vec<Value> = list.clone();
+        let has_edge = new_list.iter().any(|x| {
+            x.as_str()
+                .map(|s| s == "edge_tts" || s.starts_with("edge_tts@"))
+                .unwrap_or(false)
+        });
+        if !has_edge {
+            new_list.insert(0, Value::String("edge_tts".into()));
+            let _ = store.insert("tts_service_list".into(), Value::Array(new_list));
+        }
+    } else {
+        let _ = store.insert(
+            "tts_service_list".into(),
+            json!(["edge_tts"]),
+        );
+    }
+
+    // Ensure edge_tts instance defaults exist
+    if store.get("edge_tts").is_none() {
+        let _ = store.insert(
+            "edge_tts".into(),
+            json!({
+                "instanceName": "Edge TTS（少御向）",
+                "voice_zh": "zh-CN-XiaoxiaoNeural",
+                "voice_en": "en-US-AvaNeural",
+                "rate": "+0%",
+                "pitch": "+8Hz"
+            }),
+        );
+    }
+
+    if store.get("window_opacity").is_none() {
+        let _ = store.insert("window_opacity".into(), json!(0.92));
+    }
+
+    store.save().map_err(|e| e.to_string())?;
+    info!(
+        "Imported {} keys from official Pot config {}",
+        imported,
+        path.display()
+    );
+    Ok(json!({
+        "imported": imported,
+        "path": path.to_string_lossy(),
+        "keys": keys,
+    }))
+}
+
 /// Synthesize speech with Microsoft Edge neural voices via local `edge-tts` CLI.
 /// Returns raw MP3 bytes as a JSON array of numbers (Lingva-compatible).
 #[tauri::command(async)]

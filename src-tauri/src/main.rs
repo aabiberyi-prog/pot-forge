@@ -150,7 +150,9 @@ fn main() {
             aliyun,
             set_window_opacity,
             get_window_opacity,
-            edge_tts_synthesize
+            edge_tts_synthesize,
+            has_official_pot_config,
+            import_official_pot_config
         ])
         .on_system_tray_event(tray_event_handler)
         .build(tauri::generate_context!())
