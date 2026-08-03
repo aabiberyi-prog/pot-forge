@@ -16,17 +16,17 @@ Configs do **not** conflict with the installed official Pot.
 
 ## Features (this fork)
 
-1. **Window opacity**
-   - Settings → General → 窗口不透明度 (15%–100%)
-   - Translate window title bar mini slider (Windows)
-2. **Built-in Edge TTS**（少御向 defaults）
-   - Service → Speech → Edge TTS
-   - ZH `zh-CN-XiaoxiaoNeural` / EN `en-US-AvaNeural`
-   - Rate `-20%`（稍慢）, pitch `+10Hz`
-   - Requires local `edge-tts` (`pip install edge-tts`) or env `EDGE_TTS_PATH`
-3. **Import from official Pot**
+1. **Window opacity (shell only)**
+   - Settings → General → 背景透明度；标题栏紧凑滑条
+   - Source/target text panels always solid
+2. **Compact UI (default)**
+   - `ui_density=compact`, window ~300×280, font 14
+   - Language switcher hidden by default (`hide_language=true`)
+   - Action buttons hidden until card hover
+3. **Built-in Edge TTS**（少御向）
+   - ZH Xiaoxiao / EN Ava, rate `-20%`, pitch `+10Hz`
+4. **Import from official Pot**
    - Settings → Backup → 从官方 Pot 导入
-   - Merges `com.pot-app.desktop\config.json`, prefers Edge TTS, keeps Forge opacity, then relaunches
 
 ## Develop
 

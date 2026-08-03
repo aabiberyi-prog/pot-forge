@@ -72,6 +72,9 @@
                 },
                 "transparent": "透明效果",
                 "window_opacity": "窗口背景透明度（不影响原文/译文）",
+                "ui_density": "界面密度",
+                "ui_density_compact": "紧凑（默认）",
+                "ui_density_standard": "标准",
                 "dev_mode": "开发模式",
                 "proxy": {
                     "title": "网络代理",

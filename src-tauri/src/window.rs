@@ -151,18 +151,19 @@ fn translate_window() -> Window {
     }
     window.set_skip_taskbar(true).unwrap();
     // Get Translate Window Size
+    // Compact defaults: smaller footprint (was 350x420)
     let width = match get("translate_window_width") {
         Some(v) => v.as_i64().unwrap(),
         None => {
-            set("translate_window_width", 350);
-            350
+            set("translate_window_width", 300);
+            300
         }
     };
     let height = match get("translate_window_height") {
         Some(v) => v.as_i64().unwrap(),
         None => {
-            set("translate_window_height", 420);
-            420
+            set("translate_window_height", 280);
+            280
         }
     };
 

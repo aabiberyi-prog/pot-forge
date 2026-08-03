@@ -81,8 +81,10 @@ export default function Translate() {
     const [recognizeServiceInstanceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
     const [ttsServiceInstanceList] = useConfig('tts_service_list', ['edge_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
-    const [hideLanguage] = useConfig('hide_language', false);
+    const [hideLanguage] = useConfig('hide_language', true); // compact: language bar hidden by default
+    const [uiDensity] = useConfig('ui_density', 'compact');
     const [windowOpacity, setWindowOpacity] = useConfig('window_opacity', 0.92);
+    const isCompact = uiDensity !== 'standard';
     const [pined, setPined] = useState(false);
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
@@ -250,33 +252,36 @@ export default function Translate() {
 
     // Shell chrome opacity only — source/target text panels stay fully opaque (see SourceArea/TargetArea).
     const shellOpacity = windowOpacity ?? 0.92;
+    const titleH = isCompact ? 28 : 35;
+    const contentPad = isCompact ? 'px-[6px]' : 'px-[8px]';
 
     return (
         pluginList && (
             <div
                 className={`h-screen w-screen relative ${
                     osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'
-                }`}
+                } ${isCompact ? 'pot-density-compact' : ''}`}
                 style={{
                     // Transparent shell; does not multiply/fade child text opacity
                     backgroundColor: `hsl(var(--nextui-background) / ${shellOpacity})`,
                 }}
             >
                 <div
-                    className='fixed top-[5px] left-[5px] right-[5px] h-[30px]'
+                    className={`fixed top-[3px] left-[4px] right-[4px] h-[${titleH - 4}px]`}
                     data-tauri-drag-region='true'
                 />
                 <div
-                    className={`h-[35px] w-full flex items-center px-[4px] gap-1 ${
+                    className={`w-full flex items-center px-[2px] gap-0.5 ${
                         osType === 'Darwin' ? 'justify-end' : 'justify-between'
                     }`}
+                    style={{ height: titleH }}
                 >
                     <Button
                         isIconOnly
                         size='sm'
                         variant='flat'
                         disableAnimation
-                        className='my-auto bg-transparent'
+                        className='my-auto bg-transparent min-w-7 w-7 h-7'
                         onPress={() => {
                             if (pined) {
                                 if (closeOnBlur) {
@@ -290,15 +295,16 @@ export default function Translate() {
                             setPined(!pined);
                         }}
                     >
-                        <BsPinFill className={`text-[20px] ${pined ? 'text-primary' : 'text-default-400'}`} />
+                        <BsPinFill className={`text-[16px] ${pined ? 'text-primary' : 'text-default-400'}`} />
                     </Button>
+                    {/* Compact transparency slider (default visible, slim) */}
                     {windowOpacity !== null && osType !== 'Darwin' && (
                         <div
-                            className='flex items-center gap-1 flex-1 min-w-0 px-1'
+                            className='flex items-center gap-0.5 flex-1 min-w-0 px-0.5'
                             data-tauri-drag-region='false'
                             onMouseDown={(e) => e.stopPropagation()}
                         >
-                            <span className='text-[11px] text-default-400 shrink-0 w-[28px] text-right'>
+                            <span className='text-[10px] text-default-400 shrink-0 w-[26px] text-right tabular-nums'>
                                 {Math.round(windowOpacity * 100)}%
                             </span>
                             <Slider
@@ -307,12 +313,11 @@ export default function Translate() {
                                 minValue={0.15}
                                 maxValue={1}
                                 value={windowOpacity}
-                                className='flex-1 max-w-[140px]'
+                                className='flex-1 max-w-[120px]'
                                 aria-label='window opacity'
                                 onChange={(v) => {
                                     const val = Array.isArray(v) ? v[0] : v;
                                     setWindowOpacity(val);
-                                    // CSS-only shell fade (text panels remain solid)
                                     document.documentElement.style.setProperty(
                                         '--pot-bg-opacity',
                                         String(val)
@@ -330,15 +335,18 @@ export default function Translate() {
                         size='sm'
                         variant='flat'
                         disableAnimation
-                        className={`my-auto ${osType === 'Darwin' && 'hidden'} bg-transparent`}
+                        className={`my-auto min-w-7 w-7 h-7 ${osType === 'Darwin' && 'hidden'} bg-transparent`}
                         onPress={() => {
                             void appWindow.close();
                         }}
                     >
-                        <AiFillCloseCircle className='text-[20px] text-default-400' />
+                        <AiFillCloseCircle className='text-[16px] text-default-400' />
                     </Button>
                 </div>
-                <div className={`${osType === 'Linux' ? 'h-[calc(100vh-37px)]' : 'h-[calc(100vh-35px)]'} px-[8px]`}>
+                <div
+                    className={`${contentPad}`}
+                    style={{ height: `calc(100vh - ${titleH}px)` }}
+                >
                     <div className='h-full overflow-y-auto'>
                         <div>
                             {serviceInstanceConfigMap !== null && (
@@ -350,7 +358,7 @@ export default function Translate() {
                         </div>
                         <div className={`${hideLanguage && 'hidden'}`}>
                             <LanguageArea />
-                            <Spacer y={2} />
+                            <Spacer y={isCompact ? 1 : 2} />
                         </div>
                         <DragDropContext onDragEnd={onDragEnd}>
                             <Droppable

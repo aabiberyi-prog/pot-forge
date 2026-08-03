@@ -28,7 +28,7 @@ export default function Translate() {
     const [windowPosition, setWindowPosition] = useConfig('translate_window_position', 'mouse');
     const [rememberWindowSize, setRememberWindowSize] = useConfig('translate_remember_window_size', false);
     const [hideSource, setHideSource] = useConfig('hide_source', false);
-    const [hideLanguage, setHideLanguage] = useConfig('hide_language', false);
+    const [hideLanguage, setHideLanguage] = useConfig('hide_language', true);
     const [hideWindow, setHideWindow] = useConfig('translate_hide_window', false);
     const [closeOnBlur, setCloseOnBlur] = useConfig('translate_close_on_blur', true);
     const [alwaysOnTop, setAlwaysOnTop] = useConfig('translate_always_on_top', false);

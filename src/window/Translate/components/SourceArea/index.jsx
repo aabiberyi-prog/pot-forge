@@ -31,7 +31,9 @@ let timer = null;
 
 export default function SourceArea(props) {
     const { pluginList, serviceInstanceConfigMap } = props;
-    const [appFontSize] = useConfig('app_font_size', 16);
+    const [appFontSize] = useConfig('app_font_size', 14);
+    const [uiDensity] = useConfig('ui_density', 'compact');
+    const isCompact = uiDensity !== 'standard';
     const [sourceText, setSourceText, syncSourceText] = useSyncAtom(sourceTextAtom);
     const [detectLanguage, setDetectLanguage] = useAtom(detectLanguageAtom);
     const [incrementalTranslate] = useConfig('incremental_translate', false);
@@ -368,15 +370,19 @@ export default function SourceArea(props) {
             <Card
                 shadow='none'
                 // Fully opaque panel so window chrome transparency never fades source text
-                className='bg-content1 rounded-[10px] mt-[1px] pb-0 opacity-100'
+                className={`bg-content1 rounded-[8px] mt-[1px] pb-0 opacity-100 group ${isCompact ? 'source-card-compact' : ''}`}
                 style={{ opacity: 1, backgroundColor: 'hsl(var(--nextui-content1) / 1)' }}
             >
                 <Toaster />
-                <CardBody className='bg-content1 p-[12px] pb-0 max-h-[40vh] overflow-y-auto'>
+                <CardBody
+                    className={`bg-content1 overflow-y-auto ${
+                        isCompact ? 'p-[8px] pb-0 max-h-[28vh]' : 'p-[12px] pb-0 max-h-[40vh]'
+                    }`}
+                >
                     <textarea
                         autoFocus
                         ref={textAreaRef}
-                        className={`text-[${appFontSize}px] bg-content1 h-full resize-none outline-none`}
+                        className={`text-[${appFontSize}px] bg-content1 h-full resize-none outline-none leading-snug`}
                         value={sourceText}
                         onKeyDown={keyDown}
                         onChange={(e) => {
@@ -386,7 +392,14 @@ export default function SourceArea(props) {
                     />
                 </CardBody>
 
-                <CardFooter className='bg-content1 rounded-none rounded-b-[10px] flex justify-between px-[12px] p-[5px]'>
+                {/* compact: action row hidden until hover */}
+                <CardFooter
+                    className={`bg-content1 rounded-none rounded-b-[8px] flex justify-between ${
+                        isCompact
+                            ? 'px-[6px] py-[2px] max-h-0 overflow-hidden opacity-0 group-hover:max-h-[40px] group-hover:opacity-100 transition-all'
+                            : 'px-[12px] p-[5px]'
+                    }`}
+                >
                     <div className='flex justify-start'>
                         <ButtonGroup className='mr-[5px]'>
                             <Tooltip content={t('translate.speak')}>
@@ -473,7 +486,7 @@ export default function SourceArea(props) {
                     </Tooltip>
                 </CardFooter>
             </Card>
-            <Spacer y={2} />
+            <Spacer y={isCompact ? 1 : 2} />
         </div>
     );
 }

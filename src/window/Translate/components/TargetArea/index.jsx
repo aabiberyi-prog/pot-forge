@@ -60,7 +60,9 @@ export default function TargetArea(props) {
         return getDisplayInstanceName(instanceConfig[INSTANCE_NAME_CONFIG_KEY], serviceNameSupplier);
     }
 
-    const [appFontSize] = useConfig('app_font_size', 16);
+    const [appFontSize] = useConfig('app_font_size', 14);
+    const [uiDensity] = useConfig('ui_density', 'compact');
+    const isCompact = uiDensity !== 'standard';
     const [collectionServiceList] = useConfig('collection_service_list', []);
     const [ttsServiceList] = useConfig('tts_service_list', ['edge_tts']);
     const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
@@ -377,12 +379,14 @@ export default function TargetArea(props) {
         <Card
             shadow='none'
             // Fully opaque panel so shell transparency never fades translation text
-            className='rounded-[10px] bg-content1 opacity-100'
+            className={`rounded-[8px] bg-content1 opacity-100 group ${isCompact ? 'target-card-compact' : ''}`}
             style={{ opacity: 1, backgroundColor: 'hsl(var(--nextui-content1) / 1)' }}
         >
             <Toaster />
             <CardHeader
-                className={`flex justify-between py-1 px-0 bg-content2 h-[30px] ${hide ? 'rounded-[10px]' : 'rounded-t-[10px]'}`}
+                className={`flex justify-between py-0.5 px-0 bg-content2 ${
+                    isCompact ? 'h-[26px]' : 'h-[30px]'
+                } ${hide ? 'rounded-[8px]' : 'rounded-t-[8px]'}`}
                 {...drag}
             >
                 {/* current service instance and available service instance to change */}
@@ -497,7 +501,7 @@ export default function TargetArea(props) {
             <animated.div style={{ ...springs }}>
                 <div ref={boundRef}>
                     {/* result content */}
-                    <CardBody className={`p-[12px] pb-0 ${hide && 'h-0 p-0'}`}>
+                    <CardBody className={`${isCompact ? 'p-[8px] pb-0' : 'p-[12px] pb-0'} ${hide && 'h-0 p-0'}`}>
                         {typeof result === 'string' ? (
                             <textarea
                                 ref={textAreaRef}
@@ -631,7 +635,11 @@ export default function TargetArea(props) {
                         )}
                     </CardBody>
                     <CardFooter
-                        className={`bg-content1 rounded-none rounded-b-[10px] flex px-[12px] p-[5px] ${hide && 'hidden'}`}
+                        className={`bg-content1 rounded-none rounded-b-[8px] flex ${
+                            isCompact
+                                ? 'px-[6px] py-[2px] max-h-0 overflow-hidden opacity-0 group-hover:max-h-[44px] group-hover:opacity-100 transition-all'
+                                : 'px-[12px] p-[5px]'
+                        } ${hide && 'hidden'}`}
                     >
                         <ButtonGroup>
                             {/* speak button */}

@@ -34,7 +34,8 @@ export default function General() {
     const [appTheme, setAppTheme] = useConfig('app_theme', 'system');
     const [appFont, setAppFont] = useConfig('app_font', 'default');
     const [appFallbackFont, setAppFallbackFont] = useConfig('app_fallback_font', 'default');
-    const [appFontSize, setAppFontSize] = useConfig('app_font_size', 16);
+    const [appFontSize, setAppFontSize] = useConfig('app_font_size', 14);
+    const [uiDensity, setUiDensity] = useConfig('ui_density', 'compact');
     const [transparent, setTransparent] = useConfig('transparent', true);
     const [windowOpacity, setWindowOpacity] = useConfig('window_opacity', 0.92);
     const [devMode, setDevMode] = useConfig('dev_mode', false);
@@ -480,6 +481,31 @@ export default function General() {
                                     setTransparent(v);
                                 }}
                             />
+                        )}
+                    </div>
+                    <div className='config-item'>
+                        <h3 className='my-auto'>{t('config.general.ui_density')}</h3>
+                        {uiDensity !== null && (
+                            <Dropdown>
+                                <DropdownTrigger>
+                                    <Button variant='bordered'>
+                                        {t(`config.general.ui_density_${uiDensity}`)}
+                                    </Button>
+                                </DropdownTrigger>
+                                <DropdownMenu
+                                    aria-label='ui density'
+                                    onAction={(key) => {
+                                        setUiDensity(key);
+                                    }}
+                                >
+                                    <DropdownItem key='compact'>
+                                        {t('config.general.ui_density_compact')}
+                                    </DropdownItem>
+                                    <DropdownItem key='standard'>
+                                        {t('config.general.ui_density_standard')}
+                                    </DropdownItem>
+                                </DropdownMenu>
+                            </Dropdown>
                         )}
                     </div>
                     <div className={`config-item ${osType === 'Darwin' && 'hidden'}`}>

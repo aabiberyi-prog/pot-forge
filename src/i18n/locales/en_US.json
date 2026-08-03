@@ -72,6 +72,9 @@
                 },
                 "transparent": "Transparent Effect",
                 "window_opacity": "Window background opacity (text stays solid)",
+                "ui_density": "UI Density",
+                "ui_density_compact": "Compact (default)",
+                "ui_density_standard": "Standard",
                 "dev_mode": "Developer Mode",
                 "proxy": {
                     "title": "Proxy",
