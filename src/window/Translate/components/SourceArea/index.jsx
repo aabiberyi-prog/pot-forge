@@ -252,9 +252,11 @@ export default function SourceArea(props) {
     }, [deleteNewline, incrementalTranslate, recognizeLanguage, recognizeServiceList, hideWindow]);
 
     useEffect(() => {
-        textAreaRef.current.style.height = '50px';
-        textAreaRef.current.style.height = textAreaRef.current.scrollHeight + 'px';
-    }, [sourceText]);
+        if (!textAreaRef.current) return;
+        const minH = isCompact ? 36 : 50;
+        textAreaRef.current.style.height = '0px';
+        textAreaRef.current.style.height = Math.max(minH, textAreaRef.current.scrollHeight) + 'px';
+    }, [sourceText, appFontSize, isCompact]);
 
     const detect_language = async (text) => {
         setDetectLanguage(await detect(text));
@@ -375,14 +377,16 @@ export default function SourceArea(props) {
             >
                 <Toaster />
                 <CardBody
-                    className={`bg-content1 overflow-y-auto ${
-                        isCompact ? 'p-[8px] pb-0 max-h-[28vh]' : 'p-[12px] pb-0 max-h-[40vh]'
+                    className={`bg-content1 overflow-hidden ${
+                        isCompact ? 'p-[8px] pb-0' : 'p-[12px] pb-0'
                     }`}
                 >
                     <textarea
                         autoFocus
                         ref={textAreaRef}
-                        className={`text-[${appFontSize}px] bg-content1 h-full resize-none outline-none leading-snug`}
+                        // No scrollbar: height grows with content; window resizes to fit
+                        className={`text-[${appFontSize}px] bg-content1 w-full resize-none outline-none leading-snug overflow-hidden`}
+                        style={{ minHeight: isCompact ? 36 : 50, overflow: 'hidden' }}
                         value={sourceText}
                         onKeyDown={keyDown}
                         onChange={(e) => {

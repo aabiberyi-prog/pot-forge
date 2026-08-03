@@ -318,15 +318,16 @@ export default function TargetArea(props) {
         }
     };
 
-    // hide empty textarea
+    // Auto-grow result height; no internal scrollbar
     useEffect(() => {
         if (textAreaRef.current !== null) {
             textAreaRef.current.style.height = '0px';
+            textAreaRef.current.style.overflow = 'hidden';
             if (result !== '') {
                 textAreaRef.current.style.height = textAreaRef.current.scrollHeight + 'px';
             }
         }
-    }, [result]);
+    }, [result, appFontSize]);
 
     // refresh tts config
     useEffect(() => {
@@ -501,11 +502,16 @@ export default function TargetArea(props) {
             <animated.div style={{ ...springs }}>
                 <div ref={boundRef}>
                     {/* result content */}
-                    <CardBody className={`${isCompact ? 'p-[8px] pb-0' : 'p-[12px] pb-0'} ${hide && 'h-0 p-0'}`}>
+                    <CardBody
+                        className={`${isCompact ? 'p-[8px] pb-0' : 'p-[12px] pb-0'} overflow-hidden ${
+                            hide && 'h-0 p-0'
+                        }`}
+                    >
                         {typeof result === 'string' ? (
                             <textarea
                                 ref={textAreaRef}
-                                className={`text-[${appFontSize}px] h-0 resize-none bg-transparent select-text outline-none`}
+                                className={`text-[${appFontSize}px] h-0 w-full resize-none bg-transparent select-text outline-none overflow-hidden leading-snug`}
+                                style={{ overflow: 'hidden' }}
                                 readOnly
                                 value={result}
                             />

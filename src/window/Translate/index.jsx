@@ -1,11 +1,11 @@
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
-import { appWindow, currentMonitor } from '@tauri-apps/api/window';
+import { appWindow, currentMonitor, LogicalSize } from '@tauri-apps/api/window';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
 import { Spacer, Button, Slider } from '@nextui-org/react';
 import { AiFillCloseCircle } from 'react-icons/ai';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api';
 import { BsPinFill } from 'react-icons/bs';
@@ -88,6 +88,8 @@ export default function Translate() {
     const [pined, setPined] = useState(false);
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
+    const bodyRef = useRef(null);
+    const resizeTimerRef = useRef(null);
     const reorder = (list, startIndex, endIndex) => {
         const result = Array.from(list);
         const [removed] = result.splice(startIndex, 1);
@@ -116,6 +118,46 @@ export default function Translate() {
             un.then((f) => f());
         };
     }, [windowOpacity]);
+
+    // Grow window height with content; no internal page scrollbar
+    const fitWindowToContent = useCallback(async () => {
+        if (appWindow.label !== 'translate' || !bodyRef.current) return;
+        try {
+            const contentH = bodyRef.current.scrollHeight;
+            const titleH = isCompact ? 28 : 35;
+            const pad = isCompact ? 10 : 14;
+            let height = contentH + titleH + pad;
+            const maxH = Math.floor((window.screen?.availHeight || 900) * 0.9);
+            const minH = isCompact ? 140 : 180;
+            height = Math.max(minH, Math.min(height, maxH));
+
+            const monitor = await currentMonitor();
+            const factor = monitor.scaleFactor;
+            let size = await appWindow.outerSize();
+            size = size.toLogical(factor);
+            await appWindow.setSize(new LogicalSize(Math.round(size.width), Math.round(height)));
+        } catch (e) {
+            info(`fitWindowToContent: ${e}`);
+        }
+    }, [isCompact]);
+
+    useEffect(() => {
+        if (!bodyRef.current) return;
+        const el = bodyRef.current;
+        const schedule = () => {
+            if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+            resizeTimerRef.current = setTimeout(() => {
+                fitWindowToContent();
+            }, 40);
+        };
+        const ro = new ResizeObserver(schedule);
+        ro.observe(el);
+        schedule();
+        return () => {
+            ro.disconnect();
+            if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+        };
+    }, [fitWindowToContent, pluginList, translateServiceInstanceList, hideLanguage, serviceInstanceConfigMap]);
 
     // 是否自动关闭窗口
     useEffect(() => {
@@ -258,12 +300,14 @@ export default function Translate() {
     return (
         pluginList && (
             <div
-                className={`h-screen w-screen relative ${
+                className={`h-screen w-screen relative overflow-hidden ${
                     osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'
                 } ${isCompact ? 'pot-density-compact' : ''}`}
                 style={{
                     // Transparent shell; does not multiply/fade child text opacity
                     backgroundColor: `hsl(var(--nextui-background) / ${shellOpacity})`,
+                    // Kill any residual scrollbars on the shell
+                    scrollbarWidth: 'none',
                 }}
             >
                 <div
@@ -343,11 +387,11 @@ export default function Translate() {
                         <AiFillCloseCircle className='text-[16px] text-default-400' />
                     </Button>
                 </div>
-                <div
-                    className={`${contentPad}`}
-                    style={{ height: `calc(100vh - ${titleH}px)` }}
-                >
-                    <div className='h-full overflow-y-auto'>
+                <div className={`${contentPad} overflow-hidden`}>
+                    <div
+                        ref={bodyRef}
+                        className='overflow-hidden'
+                    >
                         <div>
                             {serviceInstanceConfigMap !== null && (
                                 <SourceArea
@@ -397,7 +441,7 @@ export default function Translate() {
                                                                     pluginList={pluginList}
                                                                     serviceInstanceConfigMap={serviceInstanceConfigMap}
                                                                 />
-                                                                <Spacer y={2} />
+                                                                <Spacer y={isCompact ? 1 : 2} />
                                                             </div>
                                                         )}
                                                     </Draggable>
