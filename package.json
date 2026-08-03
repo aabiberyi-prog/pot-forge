@@ -1,7 +1,7 @@
 {
     "name": "pot-forge",
     "private": true,
-    "version": "3.0.7-forge.1",
+    "version": "3.0.8",
     "type": "module",
     "scripts": {
         "dev": "vite",
