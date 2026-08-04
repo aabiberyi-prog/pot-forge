@@ -9,6 +9,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api';
 import { BsPinFill } from 'react-icons/bs';
+import { MdOutlineSubtitles, MdOutlineSubtitlesOff } from 'react-icons/md';
+import { Tooltip } from '@nextui-org/react';
 
 import LanguageArea from './components/LanguageArea';
 import SourceArea from './components/SourceArea';
@@ -17,6 +19,7 @@ import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
 import { info } from 'tauri-plugin-log-api';
+import { useTranslation } from 'react-i18next';
 
 let blurTimeout = null;
 let resizeTimeout = null;
@@ -82,10 +85,12 @@ export default function Translate() {
     const [ttsServiceInstanceList] = useConfig('tts_service_list', ['edge_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
     const [hideLanguage] = useConfig('hide_language', true); // compact: language bar hidden by default
+    const [hideSource, setHideSource] = useConfig('hide_source', false);
     const [uiDensity] = useConfig('ui_density', 'compact');
     const [windowOpacity, setWindowOpacity] = useConfig('window_opacity', 0.92);
     const isCompact = uiDensity !== 'standard';
     const [pined, setPined] = useState(false);
+    const { t } = useTranslation();
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
     const bodyRef = useRef(null);
@@ -341,6 +346,33 @@ export default function Translate() {
                     >
                         <BsPinFill className={`text-[16px] ${pined ? 'text-primary' : 'text-default-400'}`} />
                     </Button>
+                    {/* Toggle original text only; speak/copy/clear stay available */}
+                    {hideSource !== null && (
+                        <Tooltip
+                            content={
+                                hideSource
+                                    ? t('translate.show_source')
+                                    : t('translate.hide_source')
+                            }
+                        >
+                            <Button
+                                isIconOnly
+                                size='sm'
+                                variant='flat'
+                                disableAnimation
+                                className='my-auto bg-transparent min-w-7 w-7 h-7'
+                                onPress={() => {
+                                    setHideSource(!hideSource);
+                                }}
+                            >
+                                {hideSource ? (
+                                    <MdOutlineSubtitlesOff className='text-[16px] text-primary' />
+                                ) : (
+                                    <MdOutlineSubtitles className='text-[16px] text-default-400' />
+                                )}
+                            </Button>
+                        </Tooltip>
+                    )}
                     {/* Compact transparency slider (default visible, slim) */}
                     {windowOpacity !== null && osType !== 'Darwin' && (
                         <div

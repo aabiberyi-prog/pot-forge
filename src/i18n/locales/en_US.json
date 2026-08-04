@@ -477,7 +477,9 @@
             "copy": "Copy",
             "retry": "Try again",
             "delete_newline": "Delete Newline",
-            "translate_back": "Translation back to the original"
+            "translate_back": "Translation back to the original",
+            "hide_source": "Hide original text",
+            "show_source": "Show original text"
         },
         "recognize": {
             "recognize": "Recognize",

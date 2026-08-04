@@ -43,6 +43,7 @@ export default function SourceArea(props) {
     const [recognizeServiceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
     const [ttsServiceList] = useConfig('tts_service_list', ['edge_tts']);
     const [hideWindow] = useConfig('translate_hide_window', false);
+    // hide_source only hides the original *text*, not speak/copy/clear controls
     const [hideSource] = useConfig('hide_source', false);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const [windowType, setWindowType] = useState('[SELECTION_TRANSLATE]');
@@ -367,8 +368,12 @@ export default function SourceArea(props) {
     }, [textAreaRef]);
 
 
+    // Always keep the source card (for action buttons); only the text body can hide.
+    const forceShowActions = hideSource;
+    const textHidden = hideSource && windowType !== '[INPUT_TRANSLATE]';
+
     return (
-        <div className={hideSource && windowType !== '[INPUT_TRANSLATE]' && 'hidden'}>
+        <div>
             <Card
                 shadow='none'
                 // Fully opaque panel so window chrome transparency never fades source text
@@ -379,7 +384,7 @@ export default function SourceArea(props) {
                 <CardBody
                     className={`bg-content1 overflow-hidden ${
                         isCompact ? 'p-[8px] pb-0' : 'p-[12px] pb-0'
-                    }`}
+                    } ${textHidden ? 'hidden h-0 p-0 min-h-0' : ''}`}
                 >
                     <textarea
                         autoFocus
@@ -396,12 +401,14 @@ export default function SourceArea(props) {
                     />
                 </CardBody>
 
-                {/* compact: action row hidden until hover */}
+                {/* Action buttons always available; compact hover-hide only when source text is shown */}
                 <CardFooter
                     className={`bg-content1 rounded-none rounded-b-[8px] flex justify-between ${
-                        isCompact
+                        isCompact && !forceShowActions
                             ? 'px-[6px] py-[2px] max-h-0 overflow-hidden opacity-0 group-hover:max-h-[40px] group-hover:opacity-100 transition-all'
-                            : 'px-[12px] p-[5px]'
+                            : isCompact
+                              ? 'px-[6px] py-[4px]'
+                              : 'px-[12px] p-[5px]'
                     }`}
                 >
                     <div className='flex justify-start'>
