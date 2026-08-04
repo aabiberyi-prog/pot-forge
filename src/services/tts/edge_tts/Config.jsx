@@ -17,10 +17,12 @@ const ZH_VOICES = [
 ];
 
 const EN_VOICES = [
-    { key: 'en-US-AvaNeural', label: 'Ava (柔和女声)' },
-    { key: 'en-US-JennyNeural', label: 'Jenny' },
-    { key: 'en-US-EmmaNeural', label: 'Emma' },
-    { key: 'en-US-AndrewNeural', label: 'Andrew (男声)' },
+    { key: 'en-US-JennyNeural', label: 'Jenny (US female, natural)' },
+    { key: 'en-US-AriaNeural', label: 'Aria (US female, clear)' },
+    { key: 'en-US-AvaNeural', label: 'Ava (US female, soft)' },
+    { key: 'en-US-EmmaNeural', label: 'Emma (US female)' },
+    { key: 'en-US-MichelleNeural', label: 'Michelle (US female)' },
+    { key: 'en-US-AndrewNeural', label: 'Andrew (US male)' },
 ];
 
 export function Config(props) {
@@ -32,9 +34,9 @@ export function Config(props) {
         {
             [INSTANCE_NAME_CONFIG_KEY]: t('services.tts.edge_tts.title'),
             voice_zh: 'zh-CN-XiaoxiaoNeural',
-            voice_en: 'en-US-AvaNeural',
+            voice_en: 'en-US-JennyNeural',
             rate: '-20%',
-            pitch: '+10Hz',
+            pitch: '+0Hz',
         },
         { sync: false }
     );
@@ -84,7 +86,7 @@ export function Config(props) {
                     <h3 className='my-auto'>{t('services.tts.edge_tts.voice_en')}</h3>
                     <Select
                         className='max-w-[50%]'
-                        selectedKeys={[edgeConfig.voice_en || 'en-US-AvaNeural']}
+                        selectedKeys={[edgeConfig.voice_en || 'en-US-JennyNeural']}
                         onChange={(e) => {
                             setEdgeConfig({ ...edgeConfig, voice_en: e.target.value });
                         }}

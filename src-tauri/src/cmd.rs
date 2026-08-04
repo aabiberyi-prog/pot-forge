@@ -426,9 +426,9 @@ pub fn import_official_pot_config(mode: String) -> Result<serde_json::Value, Str
             json!({
                 "instanceName": "Edge TTS（少御向）",
                 "voice_zh": "zh-CN-XiaoxiaoNeural",
-                "voice_en": "en-US-AvaNeural",
+                "voice_en": "en-US-JennyNeural",
                 "rate": "-20%",
-                "pitch": "+10Hz"
+                "pitch": "+0Hz"
             }),
         );
     }
@@ -476,12 +476,12 @@ pub fn edge_tts_synthesize(
     let voice = if lang_l.starts_with("zh") || lang_l.starts_with("cmn") {
         voice_zh.unwrap_or_else(|| "zh-CN-XiaoxiaoNeural".into())
     } else {
-        voice_en.unwrap_or_else(|| "en-US-AvaNeural".into())
+        voice_en.unwrap_or_else(|| "en-US-JennyNeural".into())
     };
     // Negative rates like -20% MUST use --rate=-20% form; otherwise argparse
     // treats "-20%" as a new flag and errors: "argument --rate: expected one argument".
     let rate = rate.unwrap_or_else(|| "-20%".into());
-    let pitch = pitch.unwrap_or_else(|| "+10Hz".into());
+    let pitch = pitch.unwrap_or_else(|| "+0Hz".into());
     let rate_arg = format!("--rate={rate}");
     let pitch_arg = format!("--pitch={pitch}");
     let voice_arg = format!("--voice={voice}");
