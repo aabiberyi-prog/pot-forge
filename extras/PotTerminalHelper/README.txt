@@ -1,24 +1,15 @@
-Pot Forge Selection Helper
-==========================
+Pot Forge Selection Helper (headless)
+=====================================
 
-Global shortcut (primary):
-  1. Select text (Chrome search box, page, input, Word, etc.)
-  2. Press Alt+Q
-  3. Pot auto-translates the selection
+No separate tray icon. Use Pot Forge's tray icon only.
 
-Windows Terminal bonus:
-  Shift + drag-select → release mouse → auto translate
-  (Alt+Q also works in Terminal)
+Behavior:
+  - Alt+Q: translate current selection (any app)
+  - Windows Terminal: Shift+drag select also auto-translates
 
-Does not:
-  - Open new Terminal windows (start via Start-Helper.vbs)
-  - Open OCR when selection is empty
-  - Trigger when Pot Forge itself is focused
+Lifecycle:
+  - Started with Pot Forge (after rebuild with selection_helper)
+  - Or: wscript.exe "%LOCALAPPDATA%\PotTerminalHelper\Start-Helper.vbs"
+  - Log: %LOCALAPPDATA%\PotTerminalHelper\helper.log
 
 Target: D:\Pot Forge\Pot Forge.exe  port 60828
-
-Start:
-  wscript.exe "%LOCALAPPDATA%\PotTerminalHelper\Start-Helper.vbs"
-
-Log:
-  %LOCALAPPDATA%\PotTerminalHelper\helper.log

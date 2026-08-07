@@ -9,6 +9,7 @@ mod error;
 mod hotkey;
 mod lang_detect;
 mod screenshot;
+mod selection_helper;
 mod server;
 mod system_ocr;
 mod tray;
@@ -125,6 +126,8 @@ fn main() {
                 clipboard_monitor.to_string(),
             )));
             start_clipboard_monitor(app.handle());
+            // Headless Alt+Q / Terminal shift-select helper (no extra tray icon)
+            selection_helper::start_selection_helper();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -159,8 +162,14 @@ fn main() {
         .expect("error while running tauri application")
         // 窗口关闭不退出
         .run(|_app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                api.prevent_exit();
+            match event {
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    api.prevent_exit();
+                }
+                tauri::RunEvent::Exit => {
+                    selection_helper::stop_selection_helper();
+                }
+                _ => {}
             }
         });
 }

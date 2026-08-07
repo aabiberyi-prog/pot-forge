@@ -1,62 +1,18 @@
-# Pot Forge Selection Helper
-# Primary global shortcut: Alt+Q → copy current selection → auto translate (any app)
-#   - Chrome / inputs / docs: Ctrl+C
-#   - Windows Terminal: Ctrl+Shift+C
-# Bonus (Terminal only): Shift + drag-select → on release → auto translate
-# Does NOT open new console/terminal windows.
+# Pot Forge Selection Helper (headless — no tray icon; lives under Pot Forge lifecycle)
+# Alt+Q (global hotkey): translate selected text
+# Terminal Shift+drag: auto-translate on mouse release
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
+$ProgressPreference = 'SilentlyContinue'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class PotNative
-{
-    public const int VK_SHIFT = 0x10;
-    public const int VK_LBUTTON = 0x01;
-    public const int VK_MENU = 0x12;
-    public const int VK_Q = 0x51;
-    public const uint KEYEVENTF_KEYUP = 0x0002;
-
-    [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey);
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint id);
-    [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
-    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-}
-"@
-
-$helperDir = Split-Path -Parent $PSCommandPath
+$helperDir = if ($PSScriptRoot) { $PSScriptRoot } else { Join-Path $env:LOCALAPPDATA 'PotTerminalHelper' }
 $logPath = Join-Path $helperDir 'helper.log'
 $potPort = 60828
-$pollMs = 50
-$debounceMs = 400
+$debounceMs = 450
 $minSelectMs = 100
-# Processes where shift-select auto-translate is skipped (self / noise)
-$skipFgNames = @(
-    'pot forge', 'pot-forge', 'pot',
-    'potterminalhelper'
-)
-
-$script:lastTriggerUtc = [datetime]::MinValue
-$script:shiftSelectActive = $false
-$script:selectStartedUtc = [datetime]::MinValue
-$script:selectWasTerminal = $false
-$script:prevLButtonDown = $false
-$script:prevQDown = $false
-$script:busy = $false
 
 function Write-HelperLog([string]$Message) {
     try {
@@ -64,306 +20,304 @@ function Write-HelperLog([string]$Message) {
     } catch {}
 }
 
+$cs = @"
+using System;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+
+public class PotHelperForm : Form {
+    public const int HOTKEY_ALTQ = 9001;
+    public const int MOD_ALT = 0x0001;
+    public const int MOD_NOREPEAT = 0x4000;
+    public const int WM_HOTKEY = 0x0312;
+    public const int VK_Q = 0x51;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
+
+    [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
+    [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+    [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+    [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+
+    public event EventHandler AltQPressed;
+    public bool HotKeyOk = false;
+
+    public PotHelperForm() {
+        this.ShowInTaskbar = false;
+        this.FormBorderStyle = FormBorderStyle.FixedToolWindow;
+        this.Opacity = 0;
+        this.Size = new System.Drawing.Size(1, 1);
+        this.StartPosition = FormStartPosition.Manual;
+        this.Location = new System.Drawing.Point(-32000, -32000);
+        this.Text = "PotTerminalHelper";
+    }
+
+    protected override void OnHandleCreated(EventArgs e) {
+        base.OnHandleCreated(e);
+        HotKeyOk = RegisterHotKey(this.Handle, HOTKEY_ALTQ, MOD_ALT | MOD_NOREPEAT, VK_Q);
+        if (!HotKeyOk) {
+            HotKeyOk = RegisterHotKey(this.Handle, HOTKEY_ALTQ, MOD_ALT, VK_Q);
+        }
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e) {
+        try { UnregisterHotKey(this.Handle, HOTKEY_ALTQ); } catch {}
+        base.OnFormClosed(e);
+    }
+
+    protected override void WndProc(ref Message m) {
+        if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HOTKEY_ALTQ) {
+            var h = AltQPressed;
+            if (h != null) h(this, EventArgs.Empty);
+            return;
+        }
+        base.WndProc(ref m);
+    }
+
+    public static void KeyEvent(byte vk, bool up) {
+        uint flags = up ? KEYEVENTF_KEYUP : 0;
+        keybd_event(vk, 0, flags, UIntPtr.Zero);
+    }
+
+    public static bool IsDown(int vk) {
+        return (GetAsyncKeyState(vk) & 0x8000) != 0;
+    }
+}
+"@
+
+try {
+    Add-Type -TypeDefinition $cs -ReferencedAssemblies System.Windows.Forms, System.Drawing -ErrorAction Stop
+} catch {
+    if ($_.Exception.Message -notmatch 'already exists|already been defined') {
+        Write-HelperLog "Add-Type failed: $($_.Exception.Message)"
+        throw
+    }
+}
+
+$script:lastTriggerUtc = [datetime]::MinValue
+$script:shiftSelectActive = $false
+$script:selectStartedUtc = [datetime]::MinValue
+$script:prevLButtonDown = $false
+$script:prevAltQDown = $false
+$script:busy = $false
+$script:hotkeyRegistered = $false
+
 function Get-PotExePath {
-    foreach ($c in @(
-            'D:\Pot Forge\Pot Forge.exe',
-            'C:\Program Files\Pot Forge\Pot Forge.exe'
-        )) {
+    foreach ($c in @('D:\Pot Forge\Pot Forge.exe', 'C:\Program Files\Pot Forge\Pot Forge.exe')) {
         if (Test-Path -LiteralPath $c) { return $c }
     }
     return $null
 }
 
 function Test-PotServer {
-    # Prefer process check — avoids false "down" while port is busy
-    if (Get-Process -Name 'Pot Forge' -ErrorAction SilentlyContinue) {
-        $client = $null
-        try {
-            $client = [Net.Sockets.TcpClient]::new()
-            $t = $client.ConnectAsync('127.0.0.1', $potPort)
-            if ($t.Wait(300) -and $client.Connected) { return $true }
-        } catch {}
-        finally { if ($client) { $client.Dispose() } }
-    }
-    return $false
+    if (-not (Get-Process -Name 'Pot Forge' -ErrorAction SilentlyContinue)) { return $false }
+    try {
+        $client = [Net.Sockets.TcpClient]::new()
+        $t = $client.ConnectAsync('127.0.0.1', $potPort)
+        $ok = $t.Wait(400) -and $client.Connected
+        $client.Dispose()
+        return $ok
+    } catch { return $false }
 }
 
 function Ensure-PotServer {
     if (Test-PotServer) { return $true }
     $exe = Get-PotExePath
-    if (-not $exe) {
-        Write-HelperLog 'Pot Forge.exe not found on D: or Program Files.'
-        return $false
-    }
-    if (Get-Process -Name 'Pot Forge' -ErrorAction SilentlyContinue) {
-        # Process exists but port not ready yet
-        for ($i = 0; $i -lt 30; $i++) {
-            Start-Sleep -Milliseconds 200
-            if (Test-PotServer) { return $true }
-        }
-        return $false
-    }
+    if (-not $exe) { Write-HelperLog 'Pot Forge.exe not found'; return $false }
     try {
-        $psi = [Diagnostics.ProcessStartInfo]::new()
-        $psi.FileName = $exe
-        $psi.UseShellExecute = $true
-        $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Normal
-        [Diagnostics.Process]::Start($psi) | Out-Null
-        Write-HelperLog "Started Pot Forge: $exe"
+        Start-Process -FilePath $exe | Out-Null
+        Write-HelperLog "Started Pot: $exe"
         for ($i = 0; $i -lt 40; $i++) {
             Start-Sleep -Milliseconds 250
             if (Test-PotServer) { return $true }
         }
-        Write-HelperLog 'Pot Forge started but :60828 not ready.'
     } catch {
-        Write-HelperLog "Start Pot Forge failed: $($_.Exception.Message)"
+        Write-HelperLog "Start pot failed: $($_.Exception.Message)"
     }
     return $false
+}
+
+function Get-ForegroundProcessName {
+    try {
+        $hwnd = [PotHelperForm]::GetForegroundWindow()
+        $fgPid = [uint32]0
+        [void][PotHelperForm]::GetWindowThreadProcessId($hwnd, [ref]$fgPid)
+        if ($fgPid -eq 0) { return '' }
+        return (Get-Process -Id $fgPid -ErrorAction Stop).ProcessName
+    } catch { return '' }
 }
 
 function Test-IsTerminalHost([string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
-    $n = $Name.ToLowerInvariant()
-    # WindowsTerminal = frame; OpenConsole = tab host (often the focused process)
-    return @('windowsterminal', 'windowsterminalpreview', 'openconsole', 'wt') -contains $n
-}
-
-function Get-ForegroundProcessName {
-    $hwnd = [PotNative]::GetForegroundWindow()
-    $fgId = [uint32]0
-    [void][PotNative]::GetWindowThreadProcessId($hwnd, [ref]$fgId)
-    if ($fgId -eq 0) { return '' }
-    try { return (Get-Process -Id $fgId -ErrorAction Stop).ProcessName } catch { return '' }
-}
-
-function Test-KeyDown([int]$Vk) {
-    return ([PotNative]::GetAsyncKeyState($Vk) -band 0x8000) -ne 0
-}
-
-function Send-Key([byte]$vk, [bool]$up = $false) {
-    $flags = if ($up) { [PotNative]::KEYEVENTF_KEYUP } else { [uint32]0 }
-    [PotNative]::keybd_event($vk, 0, $flags, [UIntPtr]::Zero)
+    return @('windowsterminal', 'windowsterminalpreview', 'openconsole', 'wt') -contains $Name.ToLowerInvariant()
 }
 
 function Release-Modifiers {
-    # Prevent Alt/Ctrl/Shift still held (from Alt+Q) from breaking Ctrl+C in browsers/inputs
-    foreach ($vk in @(0x12, 0x11, 0x10, 0x5B, 0x5C)) { # Alt, Ctrl, Shift, LWin, RWin
-        Send-Key $vk $true
+    foreach ($vk in @(0x12, 0x11, 0x10, 0x5B, 0x5C)) {
+        [PotHelperForm]::KeyEvent([byte]$vk, $true)
     }
-    Start-Sleep -Milliseconds 30
-}
-
-function Send-TerminalCopy {
-    # Ctrl+Shift+C — Windows Terminal "copy selection"
-    # Use keybd_event only (broken SendInput struct was spawning rogue keystrokes / new tabs)
-    Release-Modifiers
-    Send-Key 0x11 $false
-    Send-Key 0x10 $false
-    Send-Key 0x43 $false
-    Start-Sleep -Milliseconds 40
-    Send-Key 0x43 $true
-    Send-Key 0x10 $true
-    Send-Key 0x11 $true
-}
-
-function Send-StandardCopy {
-    # Ctrl+C — works for most apps including Chrome omnibox / <input> / contenteditable
-    Release-Modifiers
-    Send-Key 0x11 $false   # Ctrl down
     Start-Sleep -Milliseconds 20
-    Send-Key 0x43 $false   # C down
-    Start-Sleep -Milliseconds 40
-    Send-Key 0x43 $true    # C up
-    Send-Key 0x11 $true    # Ctrl up
-}
-
-function Wait-ClipboardChange([uint32]$Before, [int]$TimeoutMs = 1000) {
-    $deadline = [datetime]::UtcNow.AddMilliseconds($TimeoutMs)
-    while ([datetime]::UtcNow -lt $deadline) {
-        if ([PotNative]::GetClipboardSequenceNumber() -ne $Before) { return $true }
-        Start-Sleep -Milliseconds 25
-    }
-    return $false
-}
-
-function Get-SelectionText([string]$Mode = 'auto') {
-    # Mode: auto | terminal | standard
-    $prevText = ''
-    try {
-        if ([Windows.Forms.Clipboard]::ContainsText()) {
-            $prevText = [Windows.Forms.Clipboard]::GetText()
-        }
-    } catch {}
-
-    $before = [PotNative]::GetClipboardSequenceNumber()
-
-    # If app already pushed selection to clipboard (copy-on-select), use it
-    Start-Sleep -Milliseconds 40
-    if ([PotNative]::GetClipboardSequenceNumber() -ne $before) {
-        $t = Get-ClipboardTextSafe
-        if (-not [string]::IsNullOrWhiteSpace($t) -and $t -ne $prevText) {
-            return $t.Trim()
-        }
-    }
-
-    $proc = Get-ForegroundProcessName
-    $inTerm = Test-IsTerminalHost $proc
-    $useTerminalCopy = ($Mode -eq 'terminal') -or ($Mode -eq 'auto' -and $inTerm)
-
-    $before2 = [PotNative]::GetClipboardSequenceNumber()
-    if ($useTerminalCopy) {
-        Send-TerminalCopy
-    } else {
-        Send-StandardCopy
-    }
-
-    if (-not (Wait-ClipboardChange $before2 1200)) {
-        # Retry the other copy method once (Chrome inputs sometimes ignore first attempt)
-        $before3 = [PotNative]::GetClipboardSequenceNumber()
-        if ($useTerminalCopy) { Send-StandardCopy } else { Send-TerminalCopy }
-        if (-not (Wait-ClipboardChange $before3 800)) {
-            return ''
-        }
-    }
-
-    # Wait for clipboard to settle
-    $last = [PotNative]::GetClipboardSequenceNumber()
-    $stable = 0
-    for ($i = 0; $i -lt 24 -and $stable -lt 4; $i++) {
-        Start-Sleep -Milliseconds 20
-        $cur = [PotNative]::GetClipboardSequenceNumber()
-        if ($cur -eq $last) { $stable++ } else { $last = $cur; $stable = 0 }
-    }
-
-    $text = Get-ClipboardTextSafe
-    if ([string]::IsNullOrWhiteSpace($text)) { return '' }
-    return $text.Trim()
 }
 
 function Get-ClipboardTextSafe {
-    for ($i = 0; $i -lt 12; $i++) {
+    for ($i = 0; $i -lt 15; $i++) {
         try {
             if ([Windows.Forms.Clipboard]::ContainsText()) {
                 return [Windows.Forms.Clipboard]::GetText()
             }
         } catch {}
-        Start-Sleep -Milliseconds 30
+        Start-Sleep -Milliseconds 25
     }
     return ''
 }
 
-function Get-TerminalSelectionText {
-    return Get-SelectionText -Mode 'terminal'
+function Wait-ClipChange([uint32]$Before, [int]$Ms = 900) {
+    $end = [datetime]::UtcNow.AddMilliseconds($Ms)
+    while ([datetime]::UtcNow -lt $end) {
+        if ([PotHelperForm]::GetClipboardSequenceNumber() -ne $Before) { return $true }
+        Start-Sleep -Milliseconds 20
+    }
+    return $false
 }
 
-function Show-PotForgeWindow {
-    # Bring Pot Forge windows (translate popup) to the front
-    $procs = @(Get-Process -Name 'Pot Forge' -ErrorAction SilentlyContinue)
-    foreach ($proc in $procs) {
-        $h = $proc.MainWindowHandle
-        if ($h -ne [IntPtr]::Zero -and $h -ne 0) {
-            if ([PotNative]::IsIconic([IntPtr]$h)) {
-                [void][PotNative]::ShowWindow([IntPtr]$h, 9) # SW_RESTORE
-            } else {
-                [void][PotNative]::ShowWindow([IntPtr]$h, 5) # SW_SHOW
-            }
-            [void][PotNative]::SetForegroundWindow([IntPtr]$h)
+function Send-CtrlC {
+    Release-Modifiers
+    [PotHelperForm]::KeyEvent(0x11, $false)
+    Start-Sleep -Milliseconds 15
+    [PotHelperForm]::KeyEvent(0x43, $false)
+    Start-Sleep -Milliseconds 45
+    [PotHelperForm]::KeyEvent(0x43, $true)
+    [PotHelperForm]::KeyEvent(0x11, $true)
+}
+
+function Send-CtrlShiftC {
+    Release-Modifiers
+    [PotHelperForm]::KeyEvent(0x11, $false)
+    [PotHelperForm]::KeyEvent(0x10, $false)
+    [PotHelperForm]::KeyEvent(0x43, $false)
+    Start-Sleep -Milliseconds 45
+    [PotHelperForm]::KeyEvent(0x43, $true)
+    [PotHelperForm]::KeyEvent(0x10, $true)
+    [PotHelperForm]::KeyEvent(0x11, $true)
+}
+
+function Send-CtrlInsert {
+    Release-Modifiers
+    [PotHelperForm]::KeyEvent(0x11, $false)
+    [PotHelperForm]::KeyEvent(0x2D, $false)
+    Start-Sleep -Milliseconds 40
+    [PotHelperForm]::KeyEvent(0x2D, $true)
+    [PotHelperForm]::KeyEvent(0x11, $true)
+}
+
+function Get-SelectionText([bool]$Term) {
+    $before = [PotHelperForm]::GetClipboardSequenceNumber()
+    Start-Sleep -Milliseconds 35
+    if ([PotHelperForm]::GetClipboardSequenceNumber() -ne $before) {
+        $t = Get-ClipboardTextSafe
+        if (-not [string]::IsNullOrWhiteSpace($t)) { return $t.Trim() }
+    }
+
+    $acts = if ($Term) { @({ Send-CtrlShiftC }, { Send-CtrlC }) } else { @({ Send-CtrlC }, { Send-CtrlInsert }, { Send-CtrlShiftC }) }
+    foreach ($a in $acts) {
+        $b = [PotHelperForm]::GetClipboardSequenceNumber()
+        & $a
+        if (Wait-ClipChange $b 900) {
+            Start-Sleep -Milliseconds 40
+            $text = Get-ClipboardTextSafe
+            if (-not [string]::IsNullOrWhiteSpace($text)) { return $text.Trim() }
+        }
+    }
+    return ''
+}
+
+function Show-PotWindow {
+    foreach ($p in @(Get-Process -Name 'Pot Forge' -ErrorAction SilentlyContinue)) {
+        $h = $p.MainWindowHandle
+        if ($h -ne 0) {
+            if ([PotHelperForm]::IsIconic([IntPtr]$h)) { [void][PotHelperForm]::ShowWindow([IntPtr]$h, 9) }
+            else { [void][PotHelperForm]::ShowWindow([IntPtr]$h, 5) }
+            [void][PotHelperForm]::SetForegroundWindow([IntPtr]$h)
         }
     }
 }
 
 function Invoke-Translate([string]$Text, [string]$Reason) {
     if ([string]::IsNullOrWhiteSpace($Text)) {
-        Write-HelperLog "Skip ($Reason): empty selection."
-        return
-    }
-    # Ignore single-char accidents only
-    if ($Text.Length -lt 2 -and $Reason -like 'shift*') {
-        Write-HelperLog "Skip ($Reason): too short ($($Text.Length))."
+        Write-HelperLog "Skip ($Reason): empty fg=$(Get-ForegroundProcessName)"
         return
     }
     $now = [datetime]::UtcNow
     if (($now - $script:lastTriggerUtc).TotalMilliseconds -lt $debounceMs) {
-        Write-HelperLog "Skip ($Reason): debounce."
+        Write-HelperLog "Skip ($Reason): debounce"
         return
     }
     if (-not (Ensure-PotServer)) {
-        Write-HelperLog "Abort ($Reason): Pot Forge not ready."
+        Write-HelperLog "Abort ($Reason): pot not ready"
         return
     }
     try {
-        Invoke-RestMethod -Uri "http://127.0.0.1:$potPort/translate" -Method Post `
-            -ContentType 'text/plain; charset=utf-8' -Body $Text -TimeoutSec 20 | Out-Null
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers[[System.Net.HttpRequestHeader]::ContentType] = 'text/plain; charset=utf-8'
+        $null = $wc.UploadData("http://127.0.0.1:$potPort/translate", 'POST', [Text.Encoding]::UTF8.GetBytes($Text))
+        $wc.Dispose()
         $script:lastTriggerUtc = $now
-        Start-Sleep -Milliseconds 120
-        Show-PotForgeWindow
-        Write-HelperLog "OK ($Reason) chars=$($Text.Length) preview=$($Text.Substring(0, [Math]::Min(40, $Text.Length)))"
+        Start-Sleep -Milliseconds 80
+        Show-PotWindow
+        $pv = ($Text.Substring(0, [Math]::Min(50, $Text.Length)) -replace '[\r\n]+', ' ')
+        Write-HelperLog "OK ($Reason) chars=$($Text.Length) fg=$(Get-ForegroundProcessName) preview=$pv"
     } catch {
         Write-HelperLog "Fail ($Reason): $($_.Exception.Message)"
     }
 }
 
-function Invoke-AutoCapture([string]$Reason, [string]$Mode = 'auto') {
-    if ($script:busy) { return }
+function Invoke-Capture([string]$Reason, [bool]$Term) {
+    if ($script:busy) { Write-HelperLog "Skip ($Reason): busy"; return }
     $script:busy = $true
     try {
-        $text = Get-SelectionText -Mode $Mode
-        Write-HelperLog "Capture ($Reason) len=$($text.Length) fg=$(Get-ForegroundProcessName) mode=$Mode"
+        $text = Get-SelectionText -Term $Term
+        Write-HelperLog "Capture ($Reason) len=$($text.Length) fg=$(Get-ForegroundProcessName) term=$Term"
         if ([string]::IsNullOrWhiteSpace($text)) {
-            Write-HelperLog "No selection text ($Reason) — select text in the field, then Alt+Q again."
+            Write-HelperLog "No selection ($Reason). Highlight text, then Alt+Q again."
             return
         }
         Invoke-Translate -Text $text -Reason $Reason
     } catch {
-        Write-HelperLog "Auto error: $($_.Exception.Message)"
+        Write-HelperLog "Capture error: $($_.Exception.Message)"
     } finally {
         $script:busy = $false
     }
 }
 
-function Invoke-AutoFromTerminal([string]$Reason) {
-    Invoke-AutoCapture -Reason $Reason -Mode 'terminal'
+function Invoke-AltQAction([string]$Source) {
+    Write-HelperLog "Alt+Q action ($Source)"
+    Release-Modifiers
+    Start-Sleep -Milliseconds 25
+    $proc = Get-ForegroundProcessName
+    Invoke-Capture -Reason 'altq' -Term (Test-IsTerminalHost $proc)
 }
 
-function Test-SkipForeground([string]$ProcName) {
-    if ([string]::IsNullOrWhiteSpace($ProcName)) { return $false }
-    $n = $ProcName.ToLowerInvariant()
-    foreach ($s in $skipFgNames) {
-        if ($n -eq $s -or $n.Contains($s)) { return $true }
-    }
-    return $false
-}
-
-function Update-InputState {
+function Update-ShiftPoll {
     try {
         $proc = Get-ForegroundProcessName
         $inTerm = Test-IsTerminalHost $proc
-        $shift = Test-KeyDown ([PotNative]::VK_SHIFT)
-        $lbtn = Test-KeyDown ([PotNative]::VK_LBUTTON)
-        $alt = Test-KeyDown ([PotNative]::VK_MENU)
-        $q = Test-KeyDown ([PotNative]::VK_Q)
+        $shift = [PotHelperForm]::IsDown(0x10)
+        $lbtn = [PotHelperForm]::IsDown(0x01)
+        $alt = [PotHelperForm]::IsDown(0x12)
+        $q = [PotHelperForm]::IsDown(0x51)
 
-        # ---- Primary global: Alt+Q → translate selected text (any app) ----
-        if ($alt -and $q -and -not $script:prevQDown) {
-            if (-not (Test-SkipForeground $proc)) {
-                # Wait until Alt/Q released so Ctrl+C is not blocked
-                $waited = 0
-                while ((Test-KeyDown ([PotNative]::VK_MENU) -or Test-KeyDown ([PotNative]::VK_Q)) -and $waited -lt 40) {
-                    Start-Sleep -Milliseconds 25
-                    $waited++
-                }
-                Release-Modifiers
-                Start-Sleep -Milliseconds 50
-                if ($inTerm) {
-                    Invoke-AutoCapture -Reason 'altq' -Mode 'terminal'
-                } else {
-                    Invoke-AutoCapture -Reason 'altq' -Mode 'standard'
-                }
+        if (-not $script:hotkeyRegistered) {
+            if ($alt -and $q -and -not $script:prevAltQDown) {
+                Invoke-AltQAction -Source 'poll-fallback'
             }
+            $script:prevAltQDown = ($alt -and $q)
         }
-        $script:prevQDown = $q
 
-        # ---- Terminal only: Shift + drag-select auto (unchanged habit in WT) ----
         if ($inTerm -and $shift -and $lbtn) {
             if (-not $script:shiftSelectActive) {
                 $script:shiftSelectActive = $true
@@ -376,66 +330,57 @@ function Update-InputState {
                 $held = ([datetime]::UtcNow - $script:selectStartedUtc).TotalMilliseconds
                 if ($held -ge $minSelectMs) {
                     Start-Sleep -Milliseconds 80
-                    Invoke-AutoCapture -Reason 'shift-select' -Mode 'terminal'
+                    Invoke-Capture -Reason 'shift-select' -Term $true
                 }
             }
             $script:shiftSelectActive = $false
         }
-
         if (-not $inTerm) { $script:shiftSelectActive = $false }
         $script:prevLButtonDown = $lbtn
     } catch {
-        Write-HelperLog "Tick error: $($_.Exception.Message)"
+        Write-HelperLog "Poll error: $($_.Exception.Message)"
     }
 }
 
-# ---- main ----
-$mutex = $null
-$timer = $null
-$form = $null
-
-try {
-    $mutex = [Threading.Mutex]::new($false, 'Local\PotTerminalHelper')
-    $owned = $false
-    try { $owned = $mutex.WaitOne(0) }
-    catch [Threading.AbandonedMutexException] {
-        $owned = $true
-        Write-HelperLog 'Took abandoned mutex.'
-    }
-    if (-not $owned) {
-        Write-HelperLog 'Already running; exit.'
-        exit 0
-    }
-
-    $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'PotTerminalHelper'
-    $form.ShowInTaskbar = $false
-    $form.FormBorderStyle = 'FixedToolWindow'
-    $form.Opacity = 0
-    $form.ShowIcon = $false
-    $form.Size = New-Object System.Drawing.Size(0, 0)
-    $form.Location = New-Object System.Drawing.Point(-10000, -10000)
-    $form.StartPosition = 'Manual'
-    $form.Add_Shown({ $form.Hide(); $form.Visible = $false })
-
-    $timer = New-Object System.Windows.Forms.Timer
-    $timer.Interval = $pollMs
-    $timer.Add_Tick({ Update-InputState })
-    $timer.Start()
-
-    $ready = Ensure-PotServer
-    Write-HelperLog "Helper READY altq-global=ON term-shift-select=ON potReady=$ready exe=$(Get-PotExePath)"
-
-    [System.Windows.Forms.Application]::Run($form)
-} catch {
-    Write-HelperLog "Fatal: $($_.Exception.Message)"
-    exit 1
-} finally {
-    try { if ($timer) { $timer.Stop(); $timer.Dispose() } } catch {}
-    try { if ($form) { $form.Dispose() } } catch {}
-    if ($mutex) {
-        try { $mutex.ReleaseMutex() } catch {}
-        try { $mutex.Dispose() } catch {}
-    }
-    Write-HelperLog 'Helper stopped.'
+# ---- single instance ----
+$mutex = [Threading.Mutex]::new($false, 'Local\PotTerminalHelper')
+$owned = $false
+try { $owned = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $owned = $true }
+if (-not $owned) {
+    Write-HelperLog 'Already running; exit.'
+    exit 0
 }
+
+$form = New-Object PotHelperForm
+
+$form.add_AltQPressed({
+        Invoke-AltQAction -Source 'RegisterHotKey'
+    })
+
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 50
+$timer.Add_Tick({ Update-ShiftPoll })
+
+$hb = New-Object System.Windows.Forms.Timer
+$hb.Interval = 600000
+$hb.Add_Tick({ Write-HelperLog "Heartbeat potReady=$(Test-PotServer) fg=$(Get-ForegroundProcessName)" })
+
+$form.Add_Shown({
+        $form.Hide()
+        $timer.Start()
+        $hb.Start()
+        $script:hotkeyRegistered = [bool]$form.HotKeyOk
+        $ready = Ensure-PotServer
+        Write-HelperLog "Helper READY headless=1 hotkeyAltQ=$($form.HotKeyOk) term-shift=ON potReady=$ready pid=$PID"
+    })
+
+$form.Add_FormClosed({
+        try { $timer.Stop(); $timer.Dispose() } catch {}
+        try { $hb.Stop(); $hb.Dispose() } catch {}
+        try { $mutex.ReleaseMutex(); $mutex.Dispose() } catch {}
+        Write-HelperLog 'Helper stopped.'
+    })
+
+Write-HelperLog "Booting headless helper from $helperDir"
+[System.Windows.Forms.Application]::EnableVisualStyles()
+[System.Windows.Forms.Application]::Run($form)
