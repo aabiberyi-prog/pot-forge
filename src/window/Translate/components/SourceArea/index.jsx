@@ -252,11 +252,24 @@ export default function SourceArea(props) {
         }
     }, [deleteNewline, incrementalTranslate, recognizeLanguage, recognizeServiceList, hideWindow]);
 
+    // Grow height with wrapped lines; re-measure when text or container width changes
     useEffect(() => {
         if (!textAreaRef.current) return;
+        const el = textAreaRef.current;
         const minH = isCompact ? 36 : 50;
-        textAreaRef.current.style.height = '0px';
-        textAreaRef.current.style.height = Math.max(minH, textAreaRef.current.scrollHeight) + 'px';
+        const fitHeight = () => {
+            el.style.height = '0px';
+            el.style.height = Math.max(minH, el.scrollHeight) + 'px';
+        };
+        fitHeight();
+        const parent = el.parentElement;
+        const ro = new ResizeObserver(() => fitHeight());
+        if (parent) ro.observe(parent);
+        window.addEventListener('resize', fitHeight);
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', fitHeight);
+        };
     }, [sourceText, appFontSize, isCompact]);
 
     const detect_language = async (text) => {
@@ -368,8 +381,7 @@ export default function SourceArea(props) {
     }, [textAreaRef]);
 
 
-    // Always keep the source card (for action buttons); only the text body can hide.
-    const forceShowActions = hideSource;
+    // hide_source only hides the text body; action row stays visible.
     const textHidden = hideSource && windowType !== '[INPUT_TRANSLATE]';
 
     return (
@@ -389,9 +401,15 @@ export default function SourceArea(props) {
                     <textarea
                         autoFocus
                         ref={textAreaRef}
-                        // No scrollbar: height grows with content; window resizes to fit
-                        className={`text-[${appFontSize}px] bg-content1 w-full resize-none outline-none leading-snug overflow-hidden`}
-                        style={{ minHeight: isCompact ? 36 : 50, overflow: 'hidden' }}
+                        // Wrap to window width; height grows with content (no scrollbar)
+                        className={`text-[${appFontSize}px] bg-content1 w-full max-w-full resize-none outline-none leading-snug overflow-hidden break-words`}
+                        style={{
+                            minHeight: isCompact ? 36 : 50,
+                            overflow: 'hidden',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'anywhere',
+                        }}
                         value={sourceText}
                         onKeyDown={keyDown}
                         onChange={(e) => {
@@ -401,15 +419,12 @@ export default function SourceArea(props) {
                     />
                 </CardBody>
 
-                {/* Action buttons always available; compact hover-hide only when source text is shown */}
+                {/* Action buttons always visible (speak / copy / clear, etc.) */}
                 <CardFooter
-                    className={`bg-content1 rounded-none rounded-b-[8px] flex justify-between ${
-                        isCompact && !forceShowActions
-                            ? 'px-[6px] py-[2px] max-h-0 overflow-hidden opacity-0 group-hover:max-h-[40px] group-hover:opacity-100 transition-all'
-                            : isCompact
-                              ? 'px-[6px] py-[4px]'
-                              : 'px-[12px] p-[5px]'
+                    className={`bg-content1 rounded-none rounded-b-[8px] flex justify-between shrink-0 ${
+                        isCompact ? 'px-[6px] py-[4px] min-h-[36px]' : 'px-[12px] p-[5px] min-h-[40px]'
                     }`}
+                    style={{ opacity: 1, maxHeight: 'none', overflow: 'visible' }}
                 >
                     <div className='flex justify-start'>
                         <ButtonGroup className='mr-[5px]'>

@@ -124,22 +124,36 @@ export default function Translate() {
         };
     }, [windowOpacity]);
 
-    // Grow window height with content; no internal page scrollbar
+    // Grow window height with content; reflow wrapped text first when width changes
     const fitWindowToContent = useCallback(async () => {
         if (appWindow.label !== 'translate' || !bodyRef.current) return;
         try {
+            // 1) Re-measure every textarea so wrap→line count updates scrollHeight
+            bodyRef.current.querySelectorAll('textarea').forEach((ta) => {
+                const minH = isCompact ? 36 : 50;
+                ta.style.height = '0px';
+                ta.style.overflow = 'hidden';
+                ta.style.whiteSpace = 'pre-wrap';
+                ta.style.wordBreak = 'break-word';
+                ta.style.overflowWrap = 'anywhere';
+                const next = Math.max(minH, ta.scrollHeight);
+                ta.style.height = `${next}px`;
+            });
+
+            // 2) Size window to full content (includes always-visible action footers)
             const contentH = bodyRef.current.scrollHeight;
             const titleH = isCompact ? 28 : 35;
-            const pad = isCompact ? 10 : 14;
+            const pad = isCompact ? 12 : 16;
             let height = contentH + titleH + pad;
             const maxH = Math.floor((window.screen?.availHeight || 900) * 0.9);
-            const minH = isCompact ? 140 : 180;
+            const minH = isCompact ? 160 : 200;
             height = Math.max(minH, Math.min(height, maxH));
 
             const monitor = await currentMonitor();
             const factor = monitor.scaleFactor;
             let size = await appWindow.outerSize();
             size = size.toLogical(factor);
+            // Keep current width; only adjust height
             await appWindow.setSize(new LogicalSize(Math.round(size.width), Math.round(height)));
         } catch (e) {
             info(`fitWindowToContent: ${e}`);
@@ -153,13 +167,20 @@ export default function Translate() {
             if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
             resizeTimerRef.current = setTimeout(() => {
                 fitWindowToContent();
-            }, 40);
+            }, 50);
         };
         const ro = new ResizeObserver(schedule);
         ro.observe(el);
         schedule();
+        // Also reflow when user drags window width
+        const unlistenResize = listen('tauri://resize', () => {
+            schedule();
+        });
+        window.addEventListener('resize', schedule);
         return () => {
             ro.disconnect();
+            window.removeEventListener('resize', schedule);
+            unlistenResize.then((f) => f());
             if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
         };
     }, [fitWindowToContent, pluginList, translateServiceInstanceList, hideLanguage, serviceInstanceConfigMap]);
@@ -419,10 +440,10 @@ export default function Translate() {
                         <AiFillCloseCircle className='text-[16px] text-default-400' />
                     </Button>
                 </div>
-                <div className={`${contentPad} overflow-hidden`}>
+                <div className={`${contentPad} overflow-x-hidden overflow-y-visible`}>
                     <div
                         ref={bodyRef}
-                        className='overflow-hidden'
+                        className='overflow-x-hidden overflow-y-visible'
                     >
                         <div>
                             {serviceInstanceConfigMap !== null && (

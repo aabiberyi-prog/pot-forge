@@ -318,16 +318,27 @@ export default function TargetArea(props) {
         }
     };
 
-    // Auto-grow result height; no internal scrollbar
+    // Auto-grow result height with wrap; re-measure when text or container width changes
     useEffect(() => {
-        if (textAreaRef.current !== null) {
-            textAreaRef.current.style.height = '0px';
-            textAreaRef.current.style.overflow = 'hidden';
+        if (textAreaRef.current === null) return;
+        const el = textAreaRef.current;
+        const fitHeight = () => {
+            el.style.height = '0px';
+            el.style.overflow = 'hidden';
             if (result !== '') {
-                textAreaRef.current.style.height = textAreaRef.current.scrollHeight + 'px';
+                el.style.height = el.scrollHeight + 'px';
             }
-        }
-    }, [result, appFontSize]);
+        };
+        fitHeight();
+        const parent = el.parentElement;
+        const ro = new ResizeObserver(() => fitHeight());
+        if (parent) ro.observe(parent);
+        window.addEventListener('resize', fitHeight);
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', fitHeight);
+        };
+    }, [result, appFontSize, isCompact]);
 
     // refresh tts config
     useEffect(() => {
@@ -510,8 +521,13 @@ export default function TargetArea(props) {
                         {typeof result === 'string' ? (
                             <textarea
                                 ref={textAreaRef}
-                                className={`text-[${appFontSize}px] h-0 w-full resize-none bg-transparent select-text outline-none overflow-hidden leading-snug`}
-                                style={{ overflow: 'hidden' }}
+                                className={`text-[${appFontSize}px] h-0 w-full max-w-full resize-none bg-transparent select-text outline-none overflow-hidden leading-snug break-words`}
+                                style={{
+                                    overflow: 'hidden',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere',
+                                }}
                                 readOnly
                                 value={result}
                             />
@@ -640,12 +656,12 @@ export default function TargetArea(props) {
                             <></>
                         )}
                     </CardBody>
+                    {/* Speak / copy / retranslate always visible */}
                     <CardFooter
-                        className={`bg-content1 rounded-none rounded-b-[8px] flex ${
-                            isCompact
-                                ? 'px-[6px] py-[2px] max-h-0 overflow-hidden opacity-0 group-hover:max-h-[44px] group-hover:opacity-100 transition-all'
-                                : 'px-[12px] p-[5px]'
+                        className={`bg-content1 rounded-none rounded-b-[8px] flex shrink-0 ${
+                            isCompact ? 'px-[6px] py-[4px] min-h-[36px]' : 'px-[12px] p-[5px] min-h-[40px]'
                         } ${hide && 'hidden'}`}
+                        style={{ opacity: 1, maxHeight: 'none', overflow: 'visible' }}
                     >
                         <ButtonGroup>
                             {/* speak button */}
