@@ -70,7 +70,7 @@ void listen('tauri://move', () => {
 
 export default function Translate() {
     const [closeOnBlur] = useConfig('translate_close_on_blur', true);
-    const [alwaysOnTop] = useConfig('translate_always_on_top', false);
+    const [alwaysOnTop, setAlwaysOnTop] = useConfig('translate_always_on_top', false);
     const [windowPosition] = useConfig('translate_window_position', 'mouse');
     const [rememberWindowSize] = useConfig('translate_remember_window_size', false);
     const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig('translate_service_list', [
@@ -191,13 +191,16 @@ export default function Translate() {
             unlistenBlur();
         }
     }, [closeOnBlur]);
-    // 是否默认置顶
+    // Default always-on-top from config (pin reflects real window state)
     useEffect(() => {
-        if (alwaysOnTop !== null && alwaysOnTop) {
+        if (alwaysOnTop === null) return;
+        if (alwaysOnTop) {
             appWindow.setAlwaysOnTop(true);
             unlistenBlur();
             setPined(true);
+            store.set('translate_session_pinned', true);
         }
+        // Do not force unpinned here — user may have toggled pin this session
     }, [alwaysOnTop]);
     // 保存窗口位置
     useEffect(() => {
@@ -352,17 +355,37 @@ export default function Translate() {
                         variant='flat'
                         disableAnimation
                         className='my-auto bg-transparent min-w-7 w-7 h-7'
-                        onPress={() => {
-                            if (pined) {
+                        onPress={async () => {
+                            const next = !pined;
+                            if (next) {
+                                // Pin: stay above other windows; ignore blur-close
+                                unlistenBlur();
+                                await appWindow.setAlwaysOnTop(true);
+                                if (alwaysOnTop === false) {
+                                    setAlwaysOnTop(true);
+                                }
+                            } else {
+                                // Unpin: must actually leave always-on-top
                                 if (closeOnBlur) {
                                     unlisten = listenBlur();
                                 }
-                                appWindow.setAlwaysOnTop(false);
-                            } else {
-                                unlistenBlur();
-                                appWindow.setAlwaysOnTop(true);
+                                await appWindow.setAlwaysOnTop(false);
+                                // Config "always on top" would re-apply — turn it off with pin
+                                if (alwaysOnTop) {
+                                    setAlwaysOnTop(false);
+                                }
+                                // Second pass after a tick (Windows layered windows can race)
+                                setTimeout(() => {
+                                    appWindow.setAlwaysOnTop(false);
+                                }, 50);
                             }
-                            setPined(!pined);
+                            setPined(next);
+                            try {
+                                await store.set('translate_session_pinned', next);
+                                await store.save();
+                            } catch (_) {
+                                /* ignore store errors */
+                            }
                         }}
                     >
                         <BsPinFill className={`text-[16px] ${pined ? 'text-primary' : 'text-default-400'}`} />

@@ -1,4 +1,16 @@
-import { Button, Card, CardBody, CardFooter, ButtonGroup, Chip, Tooltip, Spacer } from '@nextui-org/react';
+import {
+    Button,
+    Card,
+    CardBody,
+    CardFooter,
+    ButtonGroup,
+    Tooltip,
+    Spacer,
+    Dropdown,
+    DropdownMenu,
+    DropdownTrigger,
+    DropdownItem,
+} from '@nextui-org/react';
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useRef, useState } from 'react';
 import { writeText } from '@tauri-apps/api/clipboard';
@@ -18,10 +30,12 @@ import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hoo
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as recognizeServices from '../../../../services/recognize';
 import * as builtinTtsServices from '../../../../services/tts';
+import { languageList } from '../../../../utils/language';
 import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
 import { info } from 'tauri-plugin-log-api';
 import { debug } from 'tauri-plugin-log-api';
+import { sourceLanguageAtom } from '../LanguageArea';
 
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');
@@ -36,6 +50,7 @@ export default function SourceArea(props) {
     const isCompact = uiDensity !== 'standard';
     const [sourceText, setSourceText, syncSourceText] = useSyncAtom(sourceTextAtom);
     const [detectLanguage, setDetectLanguage] = useAtom(detectLanguageAtom);
+    const [sourceLanguage, setSourceLanguage] = useAtom(sourceLanguageAtom);
     const [incrementalTranslate] = useConfig('incremental_translate', false);
     const [dynamicTranslate] = useConfig('dynamic_translate', false);
     const [deleteNewline] = useConfig('translate_delete_newline', false);
@@ -47,6 +62,9 @@ export default function SourceArea(props) {
     const [hideSource] = useConfig('hide_source', false);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const [windowType, setWindowType] = useState('[SELECTION_TRANSLATE]');
+    // When true, user overrode auto-detect; keep their pick until new text arrives
+    const languageManualRef = useRef(false);
+    const [languageManual, setLanguageManual] = useState(false);
     const toastStyle = useToastStyle();
     const { t } = useTranslation();
     const textAreaRef = useRef();
@@ -60,7 +78,9 @@ export default function SourceArea(props) {
             appWindow.show();
             appWindow.setFocus();
         }
-        // 清空检测语言
+        // New text: allow auto-detect again
+        languageManualRef.current = false;
+        setLanguageManual(false);
         setDetectLanguage('');
         if (text === '[INPUT_TRANSLATE]') {
             setWindowType('[INPUT_TRANSLATE]');
@@ -273,12 +293,39 @@ export default function SourceArea(props) {
     }, [sourceText, appFontSize, isCompact]);
 
     const detect_language = async (text) => {
-        setDetectLanguage(await detect(text));
+        // Keep manual override when user fixed a wrong auto-detect
+        if (languageManualRef.current && detectLanguage) {
+            return detectLanguage;
+        }
+        const detected = await detect(text);
+        setDetectLanguage(detected);
+        return detected;
+    };
+
+    const applySourceLanguage = (key) => {
+        if (key === 'auto') {
+            languageManualRef.current = false;
+            setLanguageManual(false);
+            setSourceLanguage('auto');
+            detect(sourceText || '').then((detected) => {
+                setDetectLanguage(detected);
+                syncSourceText();
+            });
+            return;
+        }
+        languageManualRef.current = true;
+        setLanguageManual(true);
+        setDetectLanguage(key);
+        // Force source language so engines don't use auto + wrong detect
+        setSourceLanguage(key);
+        syncSourceText();
     };
 
     let sourceTextChangeTimer = null;
     const changeSourceText = async (text) => {
-        setDetectLanguage('');
+        if (!languageManualRef.current) {
+            setDetectLanguage('');
+        }
         await setSourceText(text);
         if (dynamicTranslate) {
             if (sourceTextChangeTimer) {
@@ -290,7 +337,7 @@ export default function SourceArea(props) {
                 });
             }, 1000);
         }
-    }
+    };
 
     const transformVarName = function (str) {
         let str2 = str;
@@ -484,16 +531,48 @@ export default function SourceArea(props) {
                                 </Button>
                             </Tooltip>
                         </ButtonGroup>
-                        {detectLanguage !== '' && (
-                            <Chip
-                                size='sm'
-                                color='secondary'
-                                variant='dot'
-                                className='my-auto'
-                            >
-                                {t(`languages.${detectLanguage}`)}
-                            </Chip>
-                        )}
+                        {/* Manual source-language picker (fixes wrong auto-detect, e.g. EN→zh misread) */}
+                        <Tooltip content={t('translate.select_source_language')}>
+                            <div className='my-auto'>
+                                <Dropdown>
+                                    <DropdownTrigger>
+                                        <Button
+                                            size='sm'
+                                            variant='flat'
+                                            color={languageManual ? 'primary' : 'secondary'}
+                                            className='h-7 min-w-0 px-2'
+                                        >
+                                            {detectLanguage
+                                                ? t(`languages.${detectLanguage}`)
+                                                : t('languages.auto')}
+                                            {languageManual ? ' ✓' : ''}
+                                        </Button>
+                                    </DropdownTrigger>
+                                    <DropdownMenu
+                                        aria-label={t('translate.select_source_language')}
+                                        className='max-h-[50vh] overflow-y-auto'
+                                        selectionMode='single'
+                                        selectedKeys={
+                                            languageManual && detectLanguage
+                                                ? new Set([detectLanguage])
+                                                : detectLanguage
+                                                  ? new Set([detectLanguage])
+                                                  : new Set(['auto'])
+                                        }
+                                        onAction={(key) => {
+                                            applySourceLanguage(String(key));
+                                        }}
+                                    >
+                                        <DropdownItem key='auto'>{t('languages.auto')}</DropdownItem>
+                                        {languageList.map((lang) => (
+                                            <DropdownItem key={lang}>
+                                                {t(`languages.${lang}`)}
+                                            </DropdownItem>
+                                        ))}
+                                    </DropdownMenu>
+                                </Dropdown>
+                            </div>
+                        </Tooltip>
                     </div>
                     <Tooltip content={t('translate.translate')}>
                         <Button

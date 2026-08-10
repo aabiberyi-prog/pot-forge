@@ -75,12 +75,24 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
     match app_handle.get_window(label) {
         Some(v) => {
             info!("Window existence: {}", label);
-            // Ensure existing windows actually reappear above Terminal/other apps
+            // Ensure existing windows reappear above Terminal/other apps briefly
             let _ = v.unminimize();
             let _ = v.show();
+            let keep_top = match get("translate_always_on_top") {
+                Some(val) => val.as_bool().unwrap_or(false),
+                None => false,
+            } || match get("translate_session_pinned") {
+                Some(val) => val.as_bool().unwrap_or(false),
+                None => false,
+            };
             let _ = v.set_always_on_top(true);
             let _ = v.set_focus();
-            let _ = v.set_always_on_top(false);
+            // Restore unpinned unless user/config wants always-on-top
+            if keep_top {
+                let _ = v.set_always_on_top(true);
+            } else {
+                let _ = v.set_always_on_top(false);
+            }
             (v, true)
         }
         None => {
@@ -281,10 +293,29 @@ pub fn text_translate(text: String) {
     let window = translate_window();
     let _ = window.unminimize();
     let _ = window.show();
+
+    // Briefly raise above Terminal/other apps to steal focus, then honor pin/config.
+    // Previously this left always-on-top permanently, so "unpin" looked broken.
+    let keep_top = match get("translate_always_on_top") {
+        Some(v) => v.as_bool().unwrap_or(false),
+        None => false,
+    } || match get("translate_session_pinned") {
+        Some(v) => v.as_bool().unwrap_or(false),
+        None => false,
+    };
+
     let _ = window.set_always_on_top(true);
     let _ = window.set_focus();
-    // Keep briefly on top so it wins focus against Windows Terminal after mouse release
-    let _ = window.set_always_on_top(true);
+    if keep_top {
+        let _ = window.set_always_on_top(true);
+    } else {
+        let w = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(180));
+            let _ = w.set_always_on_top(false);
+        });
+    }
+
     window.emit("new_text", text).unwrap();
 }
 

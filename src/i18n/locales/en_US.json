@@ -479,7 +479,8 @@
             "delete_newline": "Delete Newline",
             "translate_back": "Translation back to the original",
             "hide_source": "Hide original text",
-            "show_source": "Show original text"
+            "show_source": "Show original text",
+            "select_source_language": "Source language (click to correct)"
         },
         "recognize": {
             "recognize": "Recognize",
