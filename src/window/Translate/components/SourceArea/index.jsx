@@ -14,7 +14,7 @@ import {
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useRef, useState } from 'react';
 import { writeText } from '@tauri-apps/api/clipboard';
-import { HiOutlineVolumeUp } from 'react-icons/hi';
+
 import { appWindow } from '@tauri-apps/api/window';
 import toast, { Toaster } from 'react-hot-toast';
 import { listen } from '@tauri-apps/api/event';
@@ -36,6 +36,7 @@ import { store } from '../../../../utils/store';
 import { info } from 'tauri-plugin-log-api';
 import { debug } from 'tauri-plugin-log-api';
 import { sourceLanguageAtom } from '../LanguageArea';
+import SpeakButton from '../SpeakButton';
 
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');
@@ -475,20 +476,13 @@ export default function SourceArea(props) {
                 >
                     <div className='flex justify-start'>
                         <ButtonGroup className='mr-[5px]'>
-                            <Tooltip content={t('translate.speak')}>
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    onPress={() => {
-                                        handleSpeak().catch((e) => {
-                                            toast.error(e.toString(), { style: toastStyle });
-                                        });
-                                    }}
-                                >
-                                    <HiOutlineVolumeUp className='text-[16px]' />
-                                </Button>
-                            </Tooltip>
+                            <SpeakButton
+                                onSpeak={() => {
+                                    handleSpeak().catch((e) => {
+                                        toast.error(e.toString(), { style: toastStyle });
+                                    });
+                                }}
+                            />
                             <Tooltip content={t('translate.copy')}>
                                 <Button
                                     isIconOnly

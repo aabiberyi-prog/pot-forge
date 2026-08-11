@@ -19,6 +19,7 @@ import { writeText } from '@tauri-apps/api/clipboard';
 import PulseLoader from 'react-spinners/PulseLoader';
 import { TbTransformFilled } from 'react-icons/tb';
 import { HiOutlineVolumeUp } from 'react-icons/hi';
+import SpeakButton from '../SpeakButton';
 import { semanticColors } from '@nextui-org/theme';
 import toast, { Toaster } from 'react-hot-toast';
 import { MdContentCopy } from 'react-icons/md';
@@ -664,22 +665,15 @@ export default function TargetArea(props) {
                         style={{ opacity: 1, maxHeight: 'none', overflow: 'visible' }}
                     >
                         <ButtonGroup>
-                            {/* speak button */}
-                            <Tooltip content={t('translate.speak')}>
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    isDisabled={typeof result !== 'string' || result === ''}
-                                    onPress={() => {
-                                        handleSpeak().catch((e) => {
-                                            toast.error(e.toString(), { style: toastStyle });
-                                        });
-                                    }}
-                                >
-                                    <HiOutlineVolumeUp className='text-[16px]' />
-                                </Button>
-                            </Tooltip>
+                            {/* speak: short press play; long press volume (option C) */}
+                            <SpeakButton
+                                isDisabled={typeof result !== 'string' || result === ''}
+                                onSpeak={() => {
+                                    handleSpeak().catch((e) => {
+                                        toast.error(e.toString(), { style: toastStyle });
+                                    });
+                                }}
+                            />
                             {/* copy button */}
                             <Tooltip content={t('translate.copy')}>
                                 <Button

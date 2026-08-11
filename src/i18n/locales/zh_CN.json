@@ -480,7 +480,10 @@
             "translate_back": "翻译回原文",
             "hide_source": "隐藏原文",
             "show_source": "显示原文",
-            "select_source_language": "原文语言（点击可纠正识别错误）"
+            "select_source_language": "原文语言（点击可纠正识别错误）",
+            "tts_volume": "朗读音量",
+            "tts_volume_hint": "悬停调音量 · 滑到 0% 静音 · 单击朗读",
+            "tts_muted": "已静音"
         },
         "recognize": {
             "recognize": "重新识别",

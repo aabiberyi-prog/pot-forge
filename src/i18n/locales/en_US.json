@@ -480,7 +480,10 @@
             "translate_back": "Translation back to the original",
             "hide_source": "Hide original text",
             "show_source": "Show original text",
-            "select_source_language": "Source language (click to correct)"
+            "select_source_language": "Source language (click to correct)",
+            "tts_volume": "Read-aloud volume",
+            "tts_volume_hint": "Hover to adjust volume · Drag to 0% to mute · Click to speak",
+            "tts_muted": "Muted"
         },
         "recognize": {
             "recognize": "Recognize",
