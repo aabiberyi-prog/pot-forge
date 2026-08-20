@@ -173,8 +173,20 @@ export default function TargetArea(props) {
             const pluginInfo = pluginList['translate'][translateServiceName];
             if (sourceLanguage in pluginInfo.language && targetLanguage in pluginInfo.language) {
                 let newTargetLanguage = targetLanguage;
-                if (sourceLanguage === 'auto' && targetLanguage === detectLanguage) {
-                    newTargetLanguage = translateSecondLanguage;
+                // Avoid same-language translate (e.g. EN→EN when user forces English source)
+                const effectiveSource =
+                    sourceLanguage === 'auto' ? detectLanguage || sourceLanguage : sourceLanguage;
+                if (
+                    (sourceLanguage === 'auto' && targetLanguage === detectLanguage) ||
+                    (sourceLanguage !== 'auto' && sourceLanguage === targetLanguage) ||
+                    (effectiveSource && effectiveSource === targetLanguage)
+                ) {
+                    newTargetLanguage =
+                        translateSecondLanguage && translateSecondLanguage !== effectiveSource
+                            ? translateSecondLanguage
+                            : effectiveSource === 'en'
+                              ? 'zh_cn'
+                              : 'en';
                 }
                 setIsLoading(true);
                 setHide(true);
@@ -247,8 +259,20 @@ export default function TargetArea(props) {
             const LanguageEnum = builtinServices[translateServiceName].Language;
             if (sourceLanguage in LanguageEnum && targetLanguage in LanguageEnum) {
                 let newTargetLanguage = targetLanguage;
-                if (sourceLanguage === 'auto' && targetLanguage === detectLanguage) {
-                    newTargetLanguage = translateSecondLanguage;
+                // Avoid same-language translate (e.g. EN→EN when user forces English source)
+                const effectiveSource =
+                    sourceLanguage === 'auto' ? detectLanguage || sourceLanguage : sourceLanguage;
+                if (
+                    (sourceLanguage === 'auto' && targetLanguage === detectLanguage) ||
+                    (sourceLanguage !== 'auto' && sourceLanguage === targetLanguage) ||
+                    (effectiveSource && effectiveSource === targetLanguage)
+                ) {
+                    newTargetLanguage =
+                        translateSecondLanguage && translateSecondLanguage !== effectiveSource
+                            ? translateSecondLanguage
+                            : effectiveSource === 'en'
+                              ? 'zh_cn'
+                              : 'en';
                 }
                 setIsLoading(true);
                 setHide(true);

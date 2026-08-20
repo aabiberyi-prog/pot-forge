@@ -35,7 +35,7 @@ import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
 import { info } from 'tauri-plugin-log-api';
 import { debug } from 'tauri-plugin-log-api';
-import { sourceLanguageAtom } from '../LanguageArea';
+import { sourceLanguageAtom, targetLanguageAtom } from '../LanguageArea';
 import SpeakButton from '../SpeakButton';
 
 export const sourceTextAtom = atom('');
@@ -52,6 +52,7 @@ export default function SourceArea(props) {
     const [sourceText, setSourceText, syncSourceText] = useSyncAtom(sourceTextAtom);
     const [detectLanguage, setDetectLanguage] = useAtom(detectLanguageAtom);
     const [sourceLanguage, setSourceLanguage] = useAtom(sourceLanguageAtom);
+    const [targetLanguage, setTargetLanguage] = useAtom(targetLanguageAtom);
     const [incrementalTranslate] = useConfig('incremental_translate', false);
     const [dynamicTranslate] = useConfig('dynamic_translate', false);
     const [deleteNewline] = useConfig('translate_delete_newline', false);
@@ -59,6 +60,8 @@ export default function SourceArea(props) {
     const [recognizeServiceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
     const [ttsServiceList] = useConfig('tts_service_list', ['edge_tts']);
     const [hideWindow] = useConfig('translate_hide_window', false);
+    const [translateTargetLanguage] = useConfig('translate_target_language', 'zh_cn');
+    const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
     // hide_source only hides the original *text*, not speak/copy/clear controls
     const [hideSource] = useConfig('hide_source', false);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
@@ -303,6 +306,17 @@ export default function SourceArea(props) {
         return detected;
     };
 
+    const pickComplementaryTarget = (fromKey) => {
+        // Prefer configured target if it differs from source; else second language; else zh/en flip
+        const preferred = translateTargetLanguage;
+        const second = translateSecondLanguage;
+        if (preferred && preferred !== fromKey) return preferred;
+        if (second && second !== fromKey) return second;
+        if (fromKey === 'en' || fromKey === 'auto') return 'zh_cn';
+        if (String(fromKey).startsWith('zh')) return 'en';
+        return 'zh_cn';
+    };
+
     const applySourceLanguage = (key) => {
         if (key === 'auto') {
             languageManualRef.current = false;
@@ -310,6 +324,10 @@ export default function SourceArea(props) {
             setSourceLanguage('auto');
             detect(sourceText || '').then((detected) => {
                 setDetectLanguage(detected);
+                // If target equals detected language, flip target (e.g. EN text wrongly as zh was fixed via auto)
+                if (targetLanguage && detected && targetLanguage === detected) {
+                    setTargetLanguage(pickComplementaryTarget(detected));
+                }
                 syncSourceText();
             });
             return;
@@ -319,6 +337,10 @@ export default function SourceArea(props) {
         setDetectLanguage(key);
         // Force source language so engines don't use auto + wrong detect
         setSourceLanguage(key);
+        // Selecting English must translate into Chinese (not EN→EN)
+        if (!targetLanguage || targetLanguage === key) {
+            setTargetLanguage(pickComplementaryTarget(key));
+        }
         syncSourceText();
     };
 
