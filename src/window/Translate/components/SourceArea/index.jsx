@@ -306,15 +306,19 @@ export default function SourceArea(props) {
         return detected;
     };
 
-    const pickComplementaryTarget = (fromKey) => {
-        // Prefer configured target if it differs from source; else second language; else zh/en flip
-        const preferred = translateTargetLanguage;
-        const second = translateSecondLanguage;
-        if (preferred && preferred !== fromKey) return preferred;
-        if (second && second !== fromKey) return second;
-        if (fromKey === 'en' || fromKey === 'auto') return 'zh_cn';
-        if (String(fromKey).startsWith('zh')) return 'en';
-        return 'zh_cn';
+    // Fixed pairing for this product: English ↔ Chinese
+    // English selected → EN→ZH; Chinese selected → ZH→EN
+    const pairTargetForSource = (fromKey) => {
+        if (fromKey === 'en') return 'zh_cn';
+        if (fromKey === 'zh_cn' || fromKey === 'zh_tw') return 'en';
+        // Other languages: prefer config target if different, else second, else zh/en flip
+        if (translateTargetLanguage && translateTargetLanguage !== fromKey) {
+            return translateTargetLanguage;
+        }
+        if (translateSecondLanguage && translateSecondLanguage !== fromKey) {
+            return translateSecondLanguage;
+        }
+        return String(fromKey).startsWith('zh') ? 'en' : 'zh_cn';
     };
 
     const applySourceLanguage = (key) => {
@@ -324,9 +328,9 @@ export default function SourceArea(props) {
             setSourceLanguage('auto');
             detect(sourceText || '').then((detected) => {
                 setDetectLanguage(detected);
-                // If target equals detected language, flip target (e.g. EN text wrongly as zh was fixed via auto)
-                if (targetLanguage && detected && targetLanguage === detected) {
-                    setTargetLanguage(pickComplementaryTarget(detected));
+                // Auto: still avoid same-language target
+                if (detected) {
+                    setTargetLanguage(pairTargetForSource(detected));
                 }
                 syncSourceText();
             });
@@ -335,12 +339,9 @@ export default function SourceArea(props) {
         languageManualRef.current = true;
         setLanguageManual(true);
         setDetectLanguage(key);
-        // Force source language so engines don't use auto + wrong detect
         setSourceLanguage(key);
-        // Selecting English must translate into Chinese (not EN→EN)
-        if (!targetLanguage || targetLanguage === key) {
-            setTargetLanguage(pickComplementaryTarget(key));
-        }
+        // Always set the paired target (EN→ZH / ZH→EN)
+        setTargetLanguage(pairTargetForSource(key));
         syncSourceText();
     };
 
